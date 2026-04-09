@@ -1,0 +1,28 @@
+# ================= MongoDB =================
+
+
+DB_USER=qrTag
+DB_PASS=x7pKMAxJkF2odA29
+JWT_SECRET=a0819294430b3ec21f2ff70241308fbfe420d6b5311be2dc1087c48cc24efcfe
+
+
+
+PORT=5000
+
+
+# ================= BKASH =================
+BKASH_BASE_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout
+
+BKASH_APP_KEY=4f6o0cjiki2rfm34kfdadl1eqq
+BKASH_APP_SECRET=2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b
+BKASH_USERNAME=sandboxTokenizedUser02
+BKASH_PASSWORD=sandboxTokenizedUser02@12345
+
+BKASH_GRANT_TOKEN_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant
+BKASH_CREATE_PAYMENT_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/create
+BKASH_EXECUTE_PAYMENT_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute
+
+BKASH_BACKEND_CALLBACK_URL=http://localhost:5000/api/payment/bkash/callback
+
+BKASH_FRONTEND_SUCCESS_URL=http://localhost:3000/success
+BKASH_FRONTEND_FAIL_URL=http://localhost:3000/failed
