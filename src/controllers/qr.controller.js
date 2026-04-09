@@ -1,7 +1,5 @@
 import QRModel from "../models/QRCode.js";
-import Vehicle from "../models/Vehicle.js";
-import * as QRCodeLib from "qrcode";
-
+import QRCodeLib from "qrcode";
 /**
  * ASSIGN QR TO VEHICLE
  */
@@ -97,3 +95,16 @@ export const scanQR = async (req, res) => {
     res.status(500).send(err.message);
   }
 };
+
+
+
+
+export const getAllQR = async (req, res) => {
+  try {
+    const data = await QRModel.find();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
