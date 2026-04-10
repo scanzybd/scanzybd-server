@@ -13,7 +13,7 @@ import { isProvider, verifyToken } from "../middleware/auth.js";
 router.post("/add", verifyToken, addVehicle);
 router.get("/", verifyToken, getVehicles);
 router.get("/my", verifyToken, getMyVehicles);
-router.put("/update/:id", verifyToken, updateVehicle);
+router.post("/update/:id", verifyToken, updateVehicle);
 router.delete("/delete/:id", verifyToken, isProvider, deleteVehicle);
 
 export default router;

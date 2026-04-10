@@ -6,19 +6,21 @@ export const addVehicle = async (req, res) => {
     try {
         console.log("BODY:", req.body);
 
-        const { vehicleName, model, plate, driver, qrData, owner } = req.body;
+        const { vehicleName, model, plate, ownerPhone, driver, qrData, owner } = req.body;
 
         if (!owner) {
             return res.status(400).json({
                 success: false,
                 message: "Owner missing from request body",
             });
+
         }
 
         const vehicle = await Vehicle.create({
             vehicleName,
             model,
             plate,
+            ownerPhone,
             driver,
             qrData,
             owner,
@@ -106,7 +108,7 @@ export const updateVehicle = async (req, res) => {
         console.log("PARAM ID:", id);
         console.log("USER ID:", req.user._id);
 
-        const { vehicleName, model, plate, driver } = req.body;
+        const { vehicleName, model, plate, ownerPhone, driver, qrData } = req.body;
 
         const vehicle = await Vehicle.findOne({
             _id: id,
@@ -123,7 +125,10 @@ export const updateVehicle = async (req, res) => {
         vehicle.vehicleName = vehicleName ?? vehicle.vehicleName;
         vehicle.model = model ?? vehicle.model;
         vehicle.plate = plate ?? vehicle.plate;
+        vehicle.ownerPhone = ownerPhone ?? vehicle.ownerPhone;
+
         vehicle.driver = driver ?? vehicle.driver;
+        vehicle.qrData = qrData ?? vehicle.qrData;
 
         await vehicle.save();
 

@@ -16,7 +16,11 @@ const vehicleSchema = new mongoose.Schema(
             required: true,
             unique: true,
         },
-
+        ownerPhone: {
+            type: String,
+            trim: true,
+            required: true,
+        },
         driver: {
             name: String,
             phone: String,

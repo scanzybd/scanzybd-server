@@ -16,6 +16,7 @@ export const assignQRToVehicle = async (req, res) => {
     qr.vehicleId = vehicleId;
     qr.isAssigned = true; // ✅ FIXED
     qr.assignedBy = req.user._id;
+    qr.status = "assigned";
 
     await qr.save();
 
@@ -96,6 +97,43 @@ export const scanQR = async (req, res) => {
   }
 };
 
+
+
+export const getQRById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ❗ validate id first (important)
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "QR id is required",
+      });
+    }
+
+    const qr = await QRModel.findById(id);
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: qr,
+    });
+
+  } catch (err) {
+    console.error("QR FETCH ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching QR",
+    });
+  }
+};
 
 
 

@@ -13,7 +13,7 @@ const router = express.Router();
 
 // 🔥 create payment
 router.post("/create", verifyToken, createPayment);
-router.get("/bkash/callback", verifyToken, bkashCallback);
+router.get("/bkash/callback", bkashCallback);
 
 
 // 🔥 payment success callback

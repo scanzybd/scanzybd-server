@@ -4,6 +4,7 @@ import {
     scanQR,
     assignQRToVehicle,
     getAllQR,
+    getQRById,
 } from "../controllers/qr.controller.js";
 
 import { verifyToken } from "../middleware/auth.js";
@@ -16,7 +17,7 @@ router.post("/generate", verifyToken, generateQRs);
 // scan QR (public)
 
 router.get("/allQR", getAllQR);
-
+router.get("/id/:id", verifyToken, getQRById);
 router.get("/:code", scanQR);
 
 

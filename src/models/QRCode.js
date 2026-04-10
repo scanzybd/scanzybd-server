@@ -8,8 +8,7 @@ const qrSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["not assigned", "assigned"],
-            default: "not assigned",
+            default: "unassigned",
         },
 
         vehicleId: {
@@ -21,6 +20,11 @@ const qrSchema = new mongoose.Schema(
         assignedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
+        },
+
+        isAssigned: {
+            type: Boolean,
+            default: false,
         },
 
         scanCount: {
