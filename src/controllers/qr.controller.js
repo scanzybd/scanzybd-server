@@ -1,24 +1,45 @@
 import QRModel from "../models/QRCode.js";
 import QRCodeLib from "qrcode";
+import Vehicle from "../models/Vehicle.js";
+
 /**
  * ASSIGN QR TO VEHICLE
  */
 export const assignQRToVehicle = async (req, res) => {
   try {
-    const { qrId, vehicleId } = req.body;
+    const { code, vehicleId } = req.body;
 
-    const qr = await QRModel.findById(qrId);
+    if (!code || !vehicleId) {
+      return res.status(400).json({
+        message: "code and vehicleId required",
+      });
+    }
+
+    // 🔥 code দিয়ে QR খুঁজ
+    const qr = await QRModel.findOne({ code });
 
     if (!qr) {
       return res.status(404).json({ message: "QR not found" });
     }
 
+    // 🚗 vehicle check
+    const vehicle = await Vehicle.findById(vehicleId);
+
+    if (!vehicle) {
+      return res.status(404).json({ message: "Vehicle not found" });
+    }
+
+    // ✅ QR update
     qr.vehicleId = vehicleId;
-    qr.isAssigned = true; // ✅ FIXED
+    qr.isAssigned = true;
     qr.assignedBy = req.user._id;
     qr.status = "assigned";
 
     await qr.save();
+
+    // ✅ vehicle update (important)
+    vehicle.qrData = qr._id;
+    await vehicle.save();
 
     res.json({
       success: true,
@@ -27,6 +48,7 @@ export const assignQRToVehicle = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("ASSIGN ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -143,6 +165,51 @@ export const getAllQR = async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+
+export const getQRByCode = async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: "QR code is required",
+      });
+    }
+
+    // 🔥 CODE দিয়ে search
+    const qr = await QRModel.findOne({ code });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    let vehicle = null;
+
+    // ✅ যদি assigned থাকে → vehicle load
+    if (qr.status === "assigned" && qr.vehicleId) {
+      vehicle = await Vehicle.findById(qr.vehicleId);
+    }
+
+    return res.status(200).json({
+      success: true,
+      qr,
+      vehicle,
+    });
+
+  } catch (err) {
+    console.error("QR FETCH BY CODE ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 

@@ -5,6 +5,7 @@ import {
     assignQRToVehicle,
     getAllQR,
     getQRById,
+    getQRByCode,
 } from "../controllers/qr.controller.js";
 
 import { verifyToken } from "../middleware/auth.js";
@@ -12,17 +13,19 @@ import { verifyToken } from "../middleware/auth.js";
 const router = express.Router();
 
 // generate QR
+// ✅ FIXED ORDER
+
 router.post("/generate", verifyToken, generateQRs);
 
-// scan QR (public)
-
 router.get("/allQR", getAllQR);
+
 router.get("/id/:id", verifyToken, getQRById);
-router.get("/:code", scanQR);
 
+router.get("/code/:code", getQRByCode); // ✅ specific
 
-
-// assign QR (admin/provider only)
 router.post("/assign", verifyToken, assignQRToVehicle);
+
+// ⚠️ keep wildcard LAST
+router.get("/:code", scanQR);
 
 export default router;
