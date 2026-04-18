@@ -8,6 +8,9 @@ import vehicleRoutes from "./routes/vehicleRoutes.js";
 import productRoutes from "./routes/productRoutes.js"; // 🔥 ADD THIS
 import packageRoutes from "./routes/packageRoutes.js"; // 🔥 ADD THIS
 import paymentRoutes from "./routes/paymentRoutes.js"; // 🔥 ADD THIS
+import orderRoutes from "./routes/orderRoutes.js"; // 🔥 ADD THIS
+import contactRoutes from "./routes/contactRoutes.js"; // 🔥 ADD THIS
+
 
 const app = express();
 
@@ -21,5 +24,7 @@ app.use("/api/vehicle", vehicleRoutes);
 app.use("/api/products", productRoutes); // now OK ✅
 app.use("/api/package", packageRoutes); // now OK ✅
 app.use("/api/payment", paymentRoutes); // now OK ✅
+app.use("/api/order", orderRoutes); // now OK ✅
+app.use("/api/contact", contactRoutes); // 🔥 ADD THI  S
 
 export default app;

@@ -10,10 +10,20 @@ export const addProduct = async (req, res) => {
             createdAt: new Date(),
         });
 
-        res.send(result);
+        res.status(201).send({
+            success: true,
+            message: "Product created successfully",
+            data: result,
+        });
+
     } catch (error) {
         console.log(error);
-        res.status(500).send({ message: "Failed to add product" });
+
+        res.status(500).send({
+            success: false,
+            message: "Failed to add product",
+            error: error.message,
+        });
     }
 };
 
@@ -29,6 +39,34 @@ export const myProducts = async (req, res) => {
         res.send(result);
     } catch (error) {
         res.status(500).send({ message: "Failed to get products" });
+    }
+};
+
+export const getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const product = await Product.findById(id);
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: product,
+        });
+
+    } catch (error) {
+        console.log(error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch product",
+        });
     }
 };
 

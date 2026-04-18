@@ -1,63 +1,76 @@
 import axios from "axios";
 import Payment from "../models/Payment.js";
 import { grantBkashToken } from "../service/bkash.service.js";
+import Order from "../models/Order.js";
+import User from "../models/User.js";
 
 
 export const createPayment = async (req, res) => {
     try {
         const userId = req.user?._id || req.user?.id;
+        const { orderId } = req.body;
 
-        if (!userId) {
-            return res.status(401).json({ message: "Unauthorized user" });
+        const order = await Order.findById(orderId);
+
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
         }
 
-        const { amount, cartItems } = req.body;
-
-        const payment = await Payment.create({
-            userId,
-            amount,
-            cartItems,
-            status: "pending",
-        });
-
-        // 🔥 STEP 1: TOKEN
+        // 🔥 bKash token
         const id_token = await grantBkashToken();
 
-        // 🔥 STEP 2: CREATE PAYMENT
+        // 🔥 create payment
         const bkashRes = await axios.post(
             process.env.BKASH_CREATE_PAYMENT_URL,
             {
                 mode: "0011",
                 payerReference: userId.toString(),
                 callbackURL: process.env.BKASH_BACKEND_CALLBACK_URL,
-                amount: amount.toString(),
+                amount: order.totalAmount.toString(),
                 currency: "BDT",
                 intent: "sale",
-                merchantInvoiceNumber: payment._id.toString(),
+                merchantInvoiceNumber: `INV-${Date.now()}`,
+                orderId: order,
             },
             {
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: id_token, // IMPORTANT (no Bearer)
+                    Authorization: id_token,
                     "X-APP-Key": process.env.BKASH_APP_KEY,
                 },
             }
         );
 
-        return res.json({
-            success: true,
-            paymentId: payment._id,
-            bkashURL: bkashRes.data.bkashURL,
-        });
-    } catch (error) {
-        console.log("CREATE PAYMENT ERROR:", error.response?.data || error.message);
+        const bkashData = bkashRes.data;
 
-        return res.status(500).json({
-            success: false,
-            message: error.message,
+        if (!bkashData.paymentID) {
+            return res.status(400).json({
+                success: false,
+                message: "Payment init failed",
+            });
+        }
+
+        // save payment record
+        const payment = await Payment.create({
+            userId,
+            orderId: order._id,
+            amount: order.totalAmount,
+            paymentID: bkashData.paymentID,
+            status: "pending",
         });
+
+        res.json({
+            success: true,
+            bkashURL: bkashData.bkashURL,
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Payment failed" });
     }
 };
+
+
 
 export const confirmPayment = async (req, res) => {
     try {
@@ -80,18 +93,32 @@ export const confirmPayment = async (req, res) => {
             });
         }
 
+        // 🔥 STEP 1: update payment
         payment.status = "success";
         payment.transactionId = transactionId;
         payment.paidAt = new Date();
 
         await payment.save();
 
+        // 🔥 STEP 2: update order (IMPORTANT)
+        const order = await Order.findById(payment.orderId);
+
+        if (order) {
+            order.status = "paid";
+            order.paymentStatus = "paid";
+            order.transactionId = transactionId;
+
+            await order.save();
+        }
+
         return res.json({
             success: true,
-            message: "Payment successful",
+            message: "Payment successful & order updated",
         });
 
     } catch (error) {
+        console.log(error);
+
         return res.status(500).json({
             success: false,
             message: error.message,
@@ -99,23 +126,26 @@ export const confirmPayment = async (req, res) => {
     }
 };
 
+
+//write a controller function to get user payment history
 
 export const getUserPayments = async (req, res) => {
     try {
-        const payments = await Payment.find({ userId: req.user.id })
+        const userId = req.user?._id;
+
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const payments = await Payment.find({
+            userId,
+            status: "success", // ✅ ONLY SUCCESS
+        })
+            .populate("orderId")
             .sort({ createdAt: -1 });
 
-        return res.json({
-            success: true,
-            data: payments,
-        });
-
+        res.status(200).json(payments);
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        res.status(500).json({ message: error.message });
     }
 };
-
-

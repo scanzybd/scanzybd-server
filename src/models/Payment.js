@@ -7,27 +7,44 @@ const paymentSchema = new mongoose.Schema(
             ref: "User",
             required: true,
         },
+        orderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Order",
+
+        },
+
         amount: {
             type: Number,
             required: true,
         },
+
         currency: {
             type: String,
             default: "BDT",
         },
+
         paymentMethod: {
             type: String,
             default: "bkash",
         },
+
+        // 🔥 bkash payment ID (initial)
+        paymentID: {
+            type: String,
+        },
+
+        // 🔥 final transaction ID (bkash trxID)
         transactionId: {
             type: String,
             default: "",
         },
+
         status: {
             type: String,
             enum: ["pending", "success", "failed"],
             default: "pending",
         },
+
         cartItems: [
             {
                 productId: String,
@@ -36,8 +53,10 @@ const paymentSchema = new mongoose.Schema(
                 quantity: Number,
             },
         ],
+
+        completedAt: Date,
+        failedAt: Date,
     },
     { timestamps: true }
 );
-
 export default mongoose.model("Payment", paymentSchema);

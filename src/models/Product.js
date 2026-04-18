@@ -18,6 +18,11 @@ const productSchema = new mongoose.Schema(
             required: true,
         },
 
+        originalPrice: {
+            type: Number,
+            default: 0,
+        },
+
         image: {
             type: String,
             required: true,
@@ -30,6 +35,34 @@ const productSchema = new mongoose.Schema(
 
         packInfo: {
             type: String,
+        },
+
+        rating: {
+            type: Number,
+            default: 0,
+        },
+
+        reviews: {
+            type: Number,
+            default: 0,
+        },
+
+        inStock: {
+            type: Boolean,
+            default: true,
+        },
+
+        features: {
+            type: [String], // array of strings
+            default: [],
+        },
+
+        specifications: {
+            material: String,
+            dimensions: String,
+            weight: String,
+            battery: String,
+            waterproof: String,
         },
 
         createdBy: {

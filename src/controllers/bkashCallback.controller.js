@@ -1,6 +1,6 @@
-import axios from "axios";
 import Payment from "../models/Payment.js";
-import { grantBkashToken } from "../service/bkash.service.js";
+import Order from "../models/Order.js";
+import fetch from "node-fetch";
 
 export const bkashCallback = async (req, res) => {
     try {
@@ -10,56 +10,93 @@ export const bkashCallback = async (req, res) => {
             return res.status(400).json({ message: "No paymentID" });
         }
 
-        // ❌ if failed বা cancelled
+        // ❌ payment failed or cancelled
         if (status !== "success") {
-            return res.redirect("http://localhost:3000/payment-failed");
+            await Payment.findOneAndUpdate(
+                { paymentID },
+                { status: "failed", failedAt: new Date() }
+            );
+
+            return res.redirect("http://localhost:5173/payment/failed");
         }
 
-        // ✅ Step 1: get token
-        const tokenRes = await fetch("https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "username": process.env.BKASH_APP_KEY,
-                "password": process.env.BKASH_APP_SECRET,
-            },
-            body: JSON.stringify({
-                app_key: process.env.BKASH_APP_KEY,
-                app_secret: process.env.BKASH_APP_SECRET,
-            }),
-        });
+        // 🔥 GET TOKEN
+        const tokenRes = await fetch(
+            "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    username: process.env.BKASH_APP_KEY,
+                    password: process.env.BKASH_APP_SECRET,
+                },
+                body: JSON.stringify({
+                    app_key: process.env.BKASH_APP_KEY,
+                    app_secret: process.env.BKASH_APP_SECRET,
+                }),
+            }
+        );
 
         const tokenData = await tokenRes.json();
-
         const id_token = tokenData.id_token;
 
-        // ✅ Step 2: execute payment
-        const executeRes = await fetch("https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "authorization": id_token,
-                "x-app-key": process.env.BKASH_APP_KEY,
-            },
-            body: JSON.stringify({
-                paymentID,
-            }),
-        });
+        // 🔥 EXECUTE PAYMENT
+        const executeRes = await fetch(
+            "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    authorization: id_token,
+                    "x-app-key": process.env.BKASH_APP_KEY,
+                },
+                body: JSON.stringify({ paymentID }),
+            }
+        );
 
         const executeData = await executeRes.json();
 
         console.log("Execute Response:", executeData);
 
-        // ✅ Step 3: success হলে DB update
+        // 🔥 SUCCESS CASE
         if (executeData.transactionStatus === "Completed") {
-            // এখানে DB update করো
-            // await Payment.updateOne(...)
+            const payment = await Payment.findOneAndUpdate(
+                { paymentID },
+                {
+                    status: "success",
+                    transactionId: executeData.trxID,
+                    amount: executeData.amount,
+                    completedAt: new Date(),
+                },
+                { new: true }
+            );
 
-            return res.redirect("http://localhost:3000/payment-success");
-        } else {
-            return res.redirect("http://localhost:3000/payment-failed");
+            // 🔥 UPDATE ORDER ALSO (IMPORTANT)
+            if (payment?.orderId) {
+                await Order.findByIdAndUpdate(payment.orderId, {
+                    status: "paid",
+                    paymentStatus: "paid",
+                    transactionId: executeData.trxID,
+                });
+            }
+
+            return res.redirect(
+                "http://localhost:5173/payment/success"
+            );
         }
 
+        // ❌ FAILED CASE
+        await Payment.findOneAndUpdate(
+            { paymentID },
+            {
+                status: "failed",
+                failedAt: new Date(),
+            }
+        );
+
+        return res.redirect(
+            "http://localhost:5173/payment/failed"
+        );
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: "Callback error" });
