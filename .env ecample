@@ -26,3 +26,6 @@ BKASH_BACKEND_CALLBACK_URL=http://localhost:5000/api/payment/bkash/callback
 
 BKASH_FRONTEND_SUCCESS_URL=http://localhost:3000/success
 BKASH_FRONTEND_FAIL_URL=http://localhost:3000/failed
+
+# ImgBB — https://api.imgbb.com/1/upload (product images)
+IMGBB_API_KEY=

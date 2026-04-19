@@ -2,6 +2,19 @@ import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import admin from "../config/firebaseAdmin.js";
+import { findUserByFirebaseEmail } from "../utils/findUserByEmail.js";
+
+/** Backend app JWT: 24h — returns token + expiresAt (ms) for client storage */
+function signAppJwt(user) {
+    const token = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+    );
+    const decoded = jwt.decode(token);
+    const expiresAt = decoded?.exp ? decoded.exp * 1000 : Date.now() + 24 * 60 * 60 * 1000;
+    return { token, expiresAt };
+}
 
 // ================= REGISTER =================
 export const register = async (req, res) => {
@@ -41,13 +54,9 @@ export const login = async (req, res) => {
         const match = await bcrypt.compare(password, user.password);
         if (!match) return res.status(400).json({ msg: "Wrong password" });
 
-        const token = jwt.sign(
-            { id: user._id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        const { token, expiresAt } = signAppJwt(user);
 
-        res.json({ token, user });
+        res.json({ token, expiresAt, user });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -71,14 +80,14 @@ export const firebaseLogin = async (req, res) => {
             });
         }
 
-        // 🔥 STEP 1: CHECK USER
-        let user = await User.findOne({ email });
+        // STEP 1: existing user (same lookup as auth middleware — case-insensitive)
+        let user = await findUserByFirebaseEmail(email);
 
-        // 🔥 STEP 2: CREATE ONLY IF NOT EXISTS
+        // STEP 2: create only if no document matches this Firebase email
         if (!user) {
             user = await User.create({
                 name,
-                email,
+                email: String(email).toLowerCase().trim(),
                 photo,
                 role: "user",
             });
@@ -86,16 +95,12 @@ export const firebaseLogin = async (req, res) => {
 
 
 
-        // 🔥 STEP 3: JWT
-        const appToken = jwt.sign(
-            { id: user._id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        const { token: appToken, expiresAt } = signAppJwt(user);
 
         return res.json({
             success: true,
             token: appToken,
+            expiresAt,
             user,
         });
 
@@ -112,11 +117,7 @@ export const firebaseLogin = async (req, res) => {
 
 export const getMe = async (req, res) => {
     try {
-        // 🔥 email comes from verifyToken middleware
-        const email = req.user.email;
-
-
-        const user = await User.findOne({ email });
+        const user = await User.findById(req.user._id).select("-password").lean();
 
         if (!user) {
             return res.status(404).json({ msg: "User not found" });

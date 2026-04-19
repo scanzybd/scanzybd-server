@@ -29,6 +29,15 @@ export const assignQRToVehicle = async (req, res) => {
       return res.status(404).json({ message: "Vehicle not found" });
     }
 
+    if (
+      req.user?.role === "provider" &&
+      vehicle.owner?.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        message: "You can only assign QR to vehicles you registered",
+      });
+    }
+
     // ✅ QR update
     qr.vehicleId = vehicleId;
     qr.isAssigned = true;
@@ -58,9 +67,15 @@ export const assignQRToVehicle = async (req, res) => {
  */
 export const generateQRs = async (req, res) => {
   try {
-    const { count } = req.body;
+    const { count, qrType: rawType } = req.body;
 
-    const baseUrl = "http://localhost:5000/qr";
+    const allowedTypes = ["bike", "car"];
+    const qrType =
+      typeof rawType === "string" && allowedTypes.includes(rawType.trim().toLowerCase())
+        ? rawType.trim().toLowerCase()
+        : "bike";
+
+    const baseUrl = "http://localhost:5173/qr-landing";
     const list = [];
 
     for (let i = 0; i < count; i++) {
@@ -74,6 +89,7 @@ export const generateQRs = async (req, res) => {
         qrCode: qrImage,
         qrLink,
         isAssigned: false,
+        qrType,
       });
 
       list.push(qr);
@@ -157,12 +173,104 @@ export const getQRById = async (req, res) => {
   }
 };
 
+/** Query: year, month (1–12), day — filter by `createdAt` (timestamps). */
+function buildCreatedAtFilter(query) {
+  const rawY = query.year;
+  const rawM = query.month;
+  const rawD = query.day;
 
+  const year =
+    rawY != null && rawY !== "" ? parseInt(String(rawY), 10) : null;
+  const month =
+    rawM != null && rawM !== "" ? parseInt(String(rawM), 10) : null;
+  const day =
+    rawD != null && rawD !== "" ? parseInt(String(rawD), 10) : null;
+
+  const now = new Date();
+  const yFallback = now.getFullYear();
+
+  if (month != null && month >= 1 && month <= 12 && day != null && day >= 1 && day <= 31) {
+    const y = year != null && !Number.isNaN(year) ? year : yFallback;
+    const start = new Date(y, month - 1, day, 0, 0, 0, 0);
+    if (start.getMonth() !== month - 1 || start.getDate() !== day) {
+      return {};
+    }
+    const end = new Date(y, month - 1, day, 23, 59, 59, 999);
+    return { createdAt: { $gte: start, $lte: end } };
+  }
+
+  if (month != null && month >= 1 && month <= 12) {
+    const y = year != null && !Number.isNaN(year) ? year : yFallback;
+    const start = new Date(y, month - 1, 1);
+    const end = new Date(y, month, 0, 23, 59, 59, 999);
+    return { createdAt: { $gte: start, $lte: end } };
+  }
+
+  if (year != null && !Number.isNaN(year)) {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31, 23, 59, 59, 999);
+    return { createdAt: { $gte: start, $lte: end } };
+  }
+
+  return {};
+}
+
+function mergeQrTypeFilter(query, dateFilter) {
+  const raw = query.qrType;
+  const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (t !== "bike" && t !== "car") {
+    return dateFilter;
+  }
+
+  if (t === "car") {
+    return { ...dateFilter, qrType: "car" };
+  }
+
+  return {
+    ...dateFilter,
+    $or: [
+      { qrType: "bike" },
+      { qrType: { $exists: false } },
+      { qrType: null },
+    ],
+  };
+}
+
+function summarizeQrAnalytics(docs) {
+  const total = docs.length;
+  let assigned = 0;
+  let totalScans = 0;
+  const byType = {};
+
+  for (const q of docs) {
+    if (q.status === "assigned" || q.isAssigned === true) assigned += 1;
+    totalScans += Number(q.scanCount) || 0;
+    const ty = q.qrType || "bike";
+    byType[ty] = (byType[ty] || 0) + 1;
+  }
+
+  return {
+    total,
+    assigned,
+    unassigned: total - assigned,
+    totalScans,
+    byType,
+  };
+}
 
 export const getAllQR = async (req, res) => {
   try {
-    const data = await QRModel.find();
-    res.json(data);
+    const dateFilter = buildCreatedAtFilter(req.query);
+    const filter = mergeQrTypeFilter(req.query, dateFilter);
+    const data = await QRModel.find(filter).sort({ createdAt: -1 }).lean();
+
+    const analytics = summarizeQrAnalytics(data);
+
+    res.json({
+      success: true,
+      data,
+      analytics,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -212,4 +320,3 @@ export const getQRByCode = async (req, res) => {
     });
   }
 };
-

@@ -1,6 +1,6 @@
 import axios from "axios";
 import Payment from "../models/Payment.js";
-import { grantBkashToken } from "../service/bkash.service.js";
+import { getBkashIdToken } from "../service/bkash.service.js";
 import Order from "../models/Order.js";
 import User from "../models/User.js";
 
@@ -16,8 +16,8 @@ export const createPayment = async (req, res) => {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        // 🔥 bKash token
-        const id_token = await grantBkashToken();
+        // 🔥 bKash token (cached ~45 min in bkash.service)
+        const id_token = await getBkashIdToken();
 
         // 🔥 create payment
         const bkashRes = await axios.post(

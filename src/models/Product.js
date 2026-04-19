@@ -37,6 +37,12 @@ const productSchema = new mongoose.Schema(
             type: String,
         },
 
+        validityDays: {
+            type: Number,
+            default: 365,
+            min: 1,
+        },
+
         rating: {
             type: Number,
             default: 0,

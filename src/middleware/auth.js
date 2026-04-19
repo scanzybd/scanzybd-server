@@ -1,5 +1,6 @@
 import admin from "../config/firebaseAdmin.js";
 import User from "../models/User.js";
+import { findUserByFirebaseEmail } from "../utils/findUserByEmail.js";
 
 export const verifyToken = async (req, res, next) => {
     try {
@@ -11,10 +12,14 @@ export const verifyToken = async (req, res, next) => {
 
         const decoded = await admin.auth().verifyIdToken(token);
 
-        const dbUser = await User.findOne({ email: decoded.email });
+        const dbUser = await findUserByFirebaseEmail(decoded.email);
 
         if (!dbUser) {
             return res.status(404).json({ message: "User not found in DB" });
+        }
+
+        if (dbUser.isActive === false) {
+            return res.status(403).json({ message: "Account is disabled" });
         }
 
         req.user = {
@@ -52,5 +57,36 @@ export const isAdmin = (req, res, next) => {
         return res.status(403).json({ message: "Forbidden" });
     }
 
+    next();
+};
+
+/**
+ * If Authorization Bearer token is valid, sets req.user (same shape as verifyToken).
+ * On missing/invalid token, sets req.user = null and continues (for public + scoped lists).
+ */
+export const optionalVerifyToken = async (req, res, next) => {
+    req.user = null;
+    try {
+        const token = req.headers.authorization?.split(" ")[1];
+        if (!token) {
+            return next();
+        }
+
+        const decoded = await admin.auth().verifyIdToken(token);
+        const dbUser = await findUserByFirebaseEmail(decoded.email);
+
+        if (!dbUser || dbUser.isActive === false) {
+            return next();
+        }
+
+        req.user = {
+            _id: dbUser._id,
+            email: dbUser.email,
+            uid: decoded.uid,
+            role: dbUser.role,
+        };
+    } catch {
+        // ignore — treat as anonymous (e.g. storefront catalog)
+    }
     next();
 };

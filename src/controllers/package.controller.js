@@ -1,11 +1,24 @@
 import Package from "../models/Package.js";
+import User from "../models/User.js";
 
-// CREATE PACKAGE
+// CREATE PACKAGE (createdBy forced from logged-in staff)
 export const createPackage = async (req, res) => {
     try {
-        const data = req.body;
+        const dbUser = await User.findById(req.user._id);
+        if (!dbUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
 
-        const result = await Package.create(data);
+        const { createdBy: _c, createdAt: _a, ...rest } = req.body;
+
+        const result = await Package.create({
+            ...rest,
+            createdBy: {
+                name: dbUser.name,
+                email: dbUser.email,
+                uid: req.user.uid,
+            },
+        });
 
         res.status(201).json({
             success: true,
@@ -20,7 +33,7 @@ export const createPackage = async (req, res) => {
     }
 };
 
-// GET ALL PACKAGES
+// GET ALL PACKAGES — dashboard: full list for admin & provider
 export const getAllPackages = async (req, res) => {
     try {
         const result = await Package.find().sort({ createdAt: -1 });

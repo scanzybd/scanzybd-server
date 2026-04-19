@@ -6,7 +6,11 @@ export const addVehicle = async (req, res) => {
     try {
         console.log("BODY:", req.body);
 
-        const { vehicleName, model, plate, ownerPhone, driver, qrData, owner } = req.body;
+        let { vehicleName, model, plate, ownerPhone, driver, qrData, owner } = req.body;
+
+        if (req.user?.role === "provider") {
+            owner = req.user._id;
+        }
 
         if (!owner) {
             return res.status(400).json({
@@ -39,10 +43,13 @@ export const addVehicle = async (req, res) => {
     }
 };
 
-// 📄 GET ALL (ADMIN)
+// 📄 GET ALL — admin: all; provider: only vehicles they registered (owner = self)
 export const getVehicles = async (req, res) => {
     try {
-        const vehicles = await Vehicle.find()
+        const filter =
+            req.user?.role === "provider" ? { owner: req.user._id } : {};
+
+        const vehicles = await Vehicle.find(filter)
             .populate("owner", "name email role")
             .sort({ createdAt: -1 });
 

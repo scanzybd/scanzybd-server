@@ -31,6 +31,11 @@ const qrSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+
+        qrType: {
+            type: String,
+            default: "bike",
+        },
     },
     { timestamps: true }
 );

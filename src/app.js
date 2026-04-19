@@ -10,12 +10,15 @@ import packageRoutes from "./routes/packageRoutes.js"; // 🔥 ADD THIS
 import paymentRoutes from "./routes/paymentRoutes.js"; // 🔥 ADD THIS
 import orderRoutes from "./routes/orderRoutes.js"; // 🔥 ADD THIS
 import contactRoutes from "./routes/contactRoutes.js"; // 🔥 ADD THIS
+import uploadRoutes from "./routes/uploadRoutes.js";
+import expenseRoutes from "./routes/expenseRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 
 // routes
 app.use("/api/auth", authRoutes);
@@ -26,5 +29,8 @@ app.use("/api/package", packageRoutes); // now OK ✅
 app.use("/api/payment", paymentRoutes); // now OK ✅
 app.use("/api/order", orderRoutes); // now OK ✅
 app.use("/api/contact", contactRoutes); // 🔥 ADD THI  S
+app.use("/api/upload", uploadRoutes);
+app.use("/api/expenses", expenseRoutes);
+app.use("/api/users", userRoutes);
 
 export default app;
