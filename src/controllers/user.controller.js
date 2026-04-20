@@ -32,6 +32,32 @@ export const listUsers = async (req, res) => {
     }
 };
 
+/** Customer accounts only — for admin/provider to assign vehicle owner */
+export const listAssignableUsers = async (req, res) => {
+    try {
+        const { search } = req.query;
+        const filter = { role: "user", isActive: { $ne: false } };
+
+        if (search && String(search).trim()) {
+            const q = String(search).trim();
+            filter.$or = [
+                { name: new RegExp(q, "i") },
+                { email: new RegExp(q, "i") },
+            ];
+        }
+
+        const users = await User.find(filter)
+            .sort({ name: 1 })
+            .select("name email role")
+            .limit(200)
+            .lean();
+
+        res.json({ success: true, data: users });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 export const createUserByAdmin = async (req, res) => {
     try {
         const { name, email, password, role } = req.body;

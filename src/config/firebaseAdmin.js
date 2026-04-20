@@ -1,11 +1,19 @@
 import admin from "firebase-admin";
-import { createRequire } from "module";
+import { existsSync, readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
-const require = createRequire(import.meta.url);
-const serviceAccount = require("./firebaseServiceKey.json");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const keyPath = join(__dirname, "firebaseServiceKey.json");
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-});
+if (!admin.apps.length) {
+  if (existsSync(keyPath)) {
+    const serviceAccount = JSON.parse(readFileSync(keyPath, "utf8"));
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  } else {
+    // Cloud Functions / Cloud Run: default credentials for this Firebase/GCP project
+    admin.initializeApp();
+  }
+}
 
 export default admin;

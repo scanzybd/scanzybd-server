@@ -1,23 +1,60 @@
 import Vehicle from "../models/Vehicle.js";
 import User from "../models/User.js";
 
-// ➕ ADD VEHICLE
+const canManageVehicle = (vehicle, reqUser) => {
+    if (!vehicle || !reqUser?._id) return false;
+    const uid = String(reqUser._id);
+
+    if (reqUser.role === "admin") return true;
+    if (reqUser.role === "user") {
+        return String(vehicle.owner) === uid;
+    }
+    if (reqUser.role === "provider") {
+        return (
+            String(vehicle.owner) === uid ||
+            (vehicle.addedBy && String(vehicle.addedBy) === uid)
+        );
+    }
+    return false;
+};
+
+// ➕ ADD VEHICLE — end user: owner = self; admin/provider: must assign a customer (role user) + addedBy = staff
 export const addVehicle = async (req, res) => {
     try {
         console.log("BODY:", req.body);
 
         let { vehicleName, model, plate, ownerPhone, driver, qrData, owner } = req.body;
+        const role = req.user?.role;
+        let addedBy = null;
 
-        if (req.user?.role === "provider") {
+        if (role === "user") {
             owner = req.user._id;
-        }
-
-        if (!owner) {
-            return res.status(400).json({
+        } else if (role === "admin" || role === "provider") {
+            if (!owner) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Assign a customer user as vehicle owner",
+                });
+            }
+            const ownerUser = await User.findById(owner);
+            if (!ownerUser) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Owner user not found",
+                });
+            }
+            if (ownerUser.role !== "user") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Vehicle must be registered under a customer (user) account",
+                });
+            }
+            addedBy = req.user._id;
+        } else {
+            return res.status(403).json({
                 success: false,
-                message: "Owner missing from request body",
+                message: "Forbidden",
             });
-
         }
 
         const vehicle = await Vehicle.create({
@@ -28,6 +65,7 @@ export const addVehicle = async (req, res) => {
             driver,
             qrData,
             owner,
+            addedBy,
         });
 
         res.status(201).json({
@@ -43,14 +81,22 @@ export const addVehicle = async (req, res) => {
     }
 };
 
-// 📄 GET ALL — admin: all; provider: only vehicles they registered (owner = self)
+// 📄 GET ALL — admin: all; provider: vehicles they own or registered for customers
 export const getVehicles = async (req, res) => {
     try {
         const filter =
-            req.user?.role === "provider" ? { owner: req.user._id } : {};
+            req.user?.role === "provider"
+                ? {
+                      $or: [
+                          { owner: req.user._id },
+                          { addedBy: req.user._id },
+                      ],
+                  }
+                : {};
 
         const vehicles = await Vehicle.find(filter)
             .populate("owner", "name email role")
+            .populate("addedBy", "name email role")
             .sort({ createdAt: -1 });
 
         res.json({
@@ -66,30 +112,10 @@ export const getVehicles = async (req, res) => {
 };
 
 
-// 👤 MY VEHICLES
+// 👤 MY VEHICLES — token user only (no email spoofing)
 export const getMyVehicles = async (req, res) => {
     try {
-        const { email } = req.query;
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Email is required",
-            });
-        }
-
-        // 🔍 user find by email
-        const user = await User.findOne({ email });
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        // 🚗 vehicles find by owner
-        const vehicles = await Vehicle.find({ owner: user._id })
+        const vehicles = await Vehicle.find({ owner: req.user._id })
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -110,20 +136,24 @@ export const getMyVehicles = async (req, res) => {
 // ✏️ UPDATE VEHICLE
 export const updateVehicle = async (req, res) => {
     try {
-        const { id } = req.params; // ✅ MUST BE HERE
+        const { id } = req.params;
 
         console.log("PARAM ID:", id);
         console.log("USER ID:", req.user._id);
 
         const { vehicleName, model, plate, ownerPhone, driver, qrData } = req.body;
 
-        const vehicle = await Vehicle.findOne({
-            _id: id,
-            owner: req.user._id,
-        });
+        const vehicle = await Vehicle.findById(id);
 
         if (!vehicle) {
             return res.status(404).json({
+                success: false,
+                message: "Vehicle not found",
+            });
+        }
+
+        if (!canManageVehicle(vehicle, req.user)) {
+            return res.status(403).json({
                 success: false,
                 message: "Vehicle not found or unauthorized",
             });
@@ -158,17 +188,23 @@ export const deleteVehicle = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const vehicle = await Vehicle.findOneAndDelete({
-            _id: id,
-            owner: req.user._id, // 🔐 owner check
-        });
+        const vehicle = await Vehicle.findById(id);
 
         if (!vehicle) {
             return res.status(404).json({
                 success: false,
+                message: "Vehicle not found",
+            });
+        }
+
+        if (!canManageVehicle(vehicle, req.user)) {
+            return res.status(403).json({
+                success: false,
                 message: "Vehicle not found or unauthorized",
             });
         }
+
+        await Vehicle.findByIdAndDelete(id);
 
         res.status(200).json({
             success: true,

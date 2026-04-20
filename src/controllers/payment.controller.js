@@ -85,18 +85,18 @@ export const confirmPayment = async (req, res) => {
             });
         }
 
-        // ❌ prevent double payment
+        // Idempotent: callback may have already marked success
         if (payment.status === "success") {
-            return res.status(400).json({
-                success: false,
-                message: "Already paid",
+            return res.json({
+                success: true,
+                message: "Payment already completed",
+                alreadyPaid: true,
             });
         }
 
-        // 🔥 STEP 1: update payment
         payment.status = "success";
         payment.transactionId = transactionId;
-        payment.paidAt = new Date();
+        payment.completedAt = new Date();
 
         await payment.save();
 

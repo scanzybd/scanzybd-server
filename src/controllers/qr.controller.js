@@ -29,13 +29,15 @@ export const assignQRToVehicle = async (req, res) => {
       return res.status(404).json({ message: "Vehicle not found" });
     }
 
-    if (
-      req.user?.role === "provider" &&
-      vehicle.owner?.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({
-        message: "You can only assign QR to vehicles you registered",
-      });
+    if (req.user?.role === "provider") {
+      const uid = req.user._id.toString();
+      const isOwner = vehicle.owner?.toString() === uid;
+      const isRegistrar = vehicle.addedBy?.toString() === uid;
+      if (!isOwner && !isRegistrar) {
+        return res.status(403).json({
+          message: "You can only assign QR to vehicles you own or registered for a customer",
+        });
+      }
     }
 
     // ✅ QR update

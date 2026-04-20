@@ -60,6 +60,19 @@ export const isAdmin = (req, res, next) => {
     next();
 };
 
+/** Admin or provider — e.g. assign vehicles to customer accounts */
+export const isAdminOrProvider = (req, res, next) => {
+    if (!req.user?.role) {
+        return res.status(401).json({ message: "No role found" });
+    }
+
+    if (req.user.role !== "admin" && req.user.role !== "provider") {
+        return res.status(403).json({ message: "Forbidden" });
+    }
+
+    next();
+};
+
 /**
  * If Authorization Bearer token is valid, sets req.user (same shape as verifyToken).
  * On missing/invalid token, sets req.user = null and continues (for public + scoped lists).

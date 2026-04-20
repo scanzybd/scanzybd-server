@@ -14,8 +14,11 @@ dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
-// DB connect
-connectDB();
+// DB connect (fail fast for local dev)
+connectDB().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});
 
 app.get('/', (req, res) => {
     res.send('Abdullah is sitting here. So Enjoy... Your server is running!');

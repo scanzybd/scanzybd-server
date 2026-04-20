@@ -1,6 +1,15 @@
 import Payment from "../models/Payment.js";
 import Order from "../models/Order.js";
-import fetch from "node-fetch";
+import axios from "axios";
+import { getBkashIdToken } from "../service/bkash.service.js";
+
+function clientOrigin() {
+    const raw =
+        process.env.CLIENT_URL ||
+        process.env.FRONTEND_URL ||
+        "http://localhost:5173";
+    return String(raw).replace(/\/$/, "");
+}
 
 export const bkashCallback = async (req, res) => {
     try {
@@ -10,95 +19,82 @@ export const bkashCallback = async (req, res) => {
             return res.status(400).json({ message: "No paymentID" });
         }
 
-        // ❌ payment failed or cancelled
+        const failRedirect = () =>
+            res.redirect(`${clientOrigin()}/payment/failed`);
+
+        // User cancelled or failed at bKash UI
         if (status !== "success") {
             await Payment.findOneAndUpdate(
                 { paymentID },
                 { status: "failed", failedAt: new Date() }
             );
-
-            return res.redirect("http://localhost:5173/payment/failed");
+            return failRedirect();
         }
 
-        // 🔥 GET TOKEN
-        const tokenRes = await fetch(
-            "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    username: process.env.BKASH_APP_KEY,
-                    password: process.env.BKASH_APP_SECRET,
-                },
-                body: JSON.stringify({
-                    app_key: process.env.BKASH_APP_KEY,
-                    app_secret: process.env.BKASH_APP_SECRET,
-                }),
-            }
-        );
+        const id_token = await getBkashIdToken();
 
-        const tokenData = await tokenRes.json();
-        const id_token = tokenData.id_token;
+        const executeUrl =
+            process.env.BKASH_EXECUTE_PAYMENT_URL ||
+            "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute";
 
-        // 🔥 EXECUTE PAYMENT
-        const executeRes = await fetch(
-            "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    authorization: id_token,
-                    "x-app-key": process.env.BKASH_APP_KEY,
-                },
-                body: JSON.stringify({ paymentID }),
-            }
-        );
-
-        const executeData = await executeRes.json();
-
-        console.log("Execute Response:", executeData);
-
-        // 🔥 SUCCESS CASE
-        if (executeData.transactionStatus === "Completed") {
-            const payment = await Payment.findOneAndUpdate(
-                { paymentID },
-                {
-                    status: "success",
-                    transactionId: executeData.trxID,
-                    amount: executeData.amount,
-                    completedAt: new Date(),
-                },
-                { new: true }
-            );
-
-            // 🔥 UPDATE ORDER ALSO (IMPORTANT)
-            if (payment?.orderId) {
-                await Order.findByIdAndUpdate(payment.orderId, {
-                    status: "paid",
-                    paymentStatus: "paid",
-                    transactionId: executeData.trxID,
-                });
-            }
-
-            return res.redirect(
-                "http://localhost:5173/payment/success"
-            );
-        }
-
-        // ❌ FAILED CASE
-        await Payment.findOneAndUpdate(
+        const executeRes = await axios.post(
+            executeUrl,
             { paymentID },
             {
-                status: "failed",
-                failedAt: new Date(),
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: id_token,
+                    "X-APP-Key": process.env.BKASH_APP_KEY,
+                },
             }
         );
 
-        return res.redirect(
-            "http://localhost:5173/payment/failed"
+        const executeData = executeRes.data;
+
+        console.log("bKash execute response:", executeData);
+
+        const completed =
+            executeData.transactionStatus === "Completed" ||
+            (executeData.trxID && !executeData.errorMessage);
+
+        if (!completed) {
+            await Payment.findOneAndUpdate(
+                { paymentID },
+                { status: "failed", failedAt: new Date() }
+            );
+            return failRedirect();
+        }
+
+        const payment = await Payment.findOneAndUpdate(
+            { paymentID },
+            {
+                status: "success",
+                transactionId: executeData.trxID,
+                amount: executeData.amount ?? undefined,
+                completedAt: new Date(),
+            },
+            { new: true }
         );
+
+        if (payment?.orderId) {
+            await Order.findByIdAndUpdate(payment.orderId, {
+                status: "paid",
+                paymentStatus: "paid",
+            });
+        }
+
+        // App expects Mongo payment _id + trxID so PaymentSuccess can call /confirm (idempotent)
+        const pid = payment?._id?.toString();
+        const trx = encodeURIComponent(executeData.trxID || "");
+        if (pid && trx) {
+            return res.redirect(
+                `${clientOrigin()}/payment/success?paymentId=${pid}&trxID=${trx}`
+            );
+        }
+
+        return res.redirect(`${clientOrigin()}/payment/success`);
     } catch (error) {
-        console.error(error);
+        console.error("bkashCallback:", error?.response?.data || error);
         return res.status(500).json({ message: "Callback error" });
     }
 };

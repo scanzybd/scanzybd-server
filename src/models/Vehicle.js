@@ -35,6 +35,12 @@ const vehicleSchema = new mongoose.Schema(
             ref: "User",
             required: true,
         },
+        /** Set when admin/provider registers the vehicle for a customer (owner). */
+        addedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
     },
     { timestamps: true }
 );

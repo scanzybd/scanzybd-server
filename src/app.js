@@ -20,6 +20,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "12mb" }));
 
+app.get("/", (req, res) => {
+  res.type("text").send("QR Tag API — use /api/* routes.");
+});
+
 // routes
 app.use("/api/auth", authRoutes);
 app.use("/api/qr", qrRoutes);
