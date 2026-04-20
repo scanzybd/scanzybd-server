@@ -1,5 +1,6 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
+import Vehicle from "../models/Vehicle.js";
 
 /** Product _id strings for items this provider added to the catalog */
 const providerProductIds = async (email) => {
@@ -34,11 +35,106 @@ export const createOrder = async (req, res) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const { cartItems, amount } = req.body;
+        const { cartItems, amount, tagAssignments: rawSlots, shippingAddress: ship } = req.body;
+
+        if (!Array.isArray(cartItems) || cartItems.length === 0) {
+            return res.status(400).json({ message: "Cart is empty" });
+        }
+
+        const shippingAddress = {
+            fullName: String(ship?.fullName || "").trim(),
+            phone: String(ship?.phone || "").trim(),
+            line1: String(ship?.line1 || "").trim(),
+            line2: String(ship?.line2 || "").trim(),
+            city: String(ship?.city || "").trim(),
+            district: String(ship?.district || "").trim(),
+            postalCode: String(ship?.postalCode || "").trim(),
+        };
+
+        if (
+            !shippingAddress.fullName ||
+            !shippingAddress.phone ||
+            !shippingAddress.line1 ||
+            !shippingAddress.city
+        ) {
+            return res.status(400).json({
+                message:
+                    "Delivery address required: full name, phone, address line, and city.",
+            });
+        }
+
+        const totalQty = cartItems.reduce(
+            (sum, i) => sum + Math.max(1, Number(i.quantity) || 1),
+            0
+        );
+
+        if (!Array.isArray(rawSlots) || rawSlots.length !== totalQty) {
+            return res.status(400).json({
+                message:
+                    "Provide vehicle details for each tag — count must match total items in cart.",
+            });
+        }
+
+        const tagAssignments = [];
+
+        for (let i = 0; i < rawSlots.length; i++) {
+            const slot = rawSlots[i];
+            const vehicleName = String(slot.vehicleName || "").trim();
+            const model = String(slot.model || "").trim();
+            const plateRaw = String(slot.plate || "").trim();
+            const ownerPhone = String(slot.ownerPhone || "").trim();
+            const productId = String(slot.productId || "").trim();
+            const productTitle = String(slot.productTitle || "").trim();
+
+            if (!vehicleName || !model || !plateRaw || !ownerPhone || !productId) {
+                return res.status(400).json({
+                    message: `Tag ${i + 1}: fill vehicle name, model, plate, and owner phone.`,
+                });
+            }
+
+            let driver;
+            if (slot.driver?.name?.trim() && slot.driver?.phone?.trim()) {
+                driver = {
+                    name: slot.driver.name.trim(),
+                    phone: slot.driver.phone.trim(),
+                };
+            }
+
+            const plate = plateRaw.toUpperCase();
+
+            let vehicle = await Vehicle.findOne({
+                owner: userId,
+                plate,
+            });
+
+            if (!vehicle) {
+                vehicle = await Vehicle.create({
+                    vehicleName,
+                    model,
+                    plate,
+                    ownerPhone,
+                    driver,
+                    owner: userId,
+                    addedBy: null,
+                    qrData: null,
+                });
+            } else if (driver) {
+                vehicle.driver = driver;
+                await vehicle.save();
+            }
+
+            tagAssignments.push({
+                productId,
+                productTitle,
+                vehicleId: vehicle._id,
+            });
+        }
 
         const order = await Order.create({
-            userId: userId,   // ✅ FIXED
+            userId,
             items: cartItems,
+            tagAssignments,
+            shippingAddress,
             totalAmount: amount,
             status: "pending",
             paymentStatus: "unpaid",
@@ -50,7 +146,9 @@ export const createOrder = async (req, res) => {
         });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ message: "Order creation failed" });
+        res.status(500).json({
+            message: error.message || "Order creation failed",
+        });
     }
 };
 

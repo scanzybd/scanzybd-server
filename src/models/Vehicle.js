@@ -14,7 +14,7 @@ const vehicleSchema = new mongoose.Schema(
         plate: {
             type: String,
             required: true,
-            unique: true,
+            trim: true,
         },
         ownerPhone: {
             type: String,
@@ -44,5 +44,7 @@ const vehicleSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+vehicleSchema.index({ owner: 1, plate: 1 }, { unique: true });
 
 export default mongoose.model("Vehicle", vehicleSchema);
