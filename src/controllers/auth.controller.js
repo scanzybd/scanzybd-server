@@ -1,8 +1,8 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import admin from "../config/firebaseAdmin.js";
-import { findUserByFirebaseEmail } from "../utils/findUserByEmail.js";
+import crypto from "crypto";
+import { sendResetCodeEmail } from "../utils/mailer.js";
 
 /** Backend app JWT: 24h — returns token + expiresAt (ms) for client storage */
 function signAppJwt(user) {
@@ -46,10 +46,30 @@ export const register = async (req, res) => {
 // ================= LOGIN =================
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const email = String(req.body?.email || "").toLowerCase().trim();
+        const password = String(req.body?.password || "");
 
-        const user = await User.findOne({ email });
+        if (!email || !password) {
+            return res.status(400).json({ msg: "Email and password are required" });
+        }
+
+        // Prefer DB account that actually has a password (in case a social-only record also exists).
+        let user = await User.findOne({
+            email,
+            password: { $type: "string", $ne: "" },
+        }).sort({ createdAt: -1 });
+
+        // Fallback: any account with this email (for better error messaging).
+        if (!user) {
+            user = await User.findOne({ email }).sort({ createdAt: -1 });
+        }
+
         if (!user) return res.status(404).json({ msg: "User not found" });
+        if (!user.password || typeof user.password !== "string") {
+            return res.status(400).json({
+                msg: "Password is not set for this account. Use Forgot Password to set a new password, then login with email and password.",
+            });
+        }
 
         const match = await bcrypt.compare(password, user.password);
         if (!match) return res.status(400).json({ msg: "Wrong password" });
@@ -62,53 +82,55 @@ export const login = async (req, res) => {
     }
 };
 
-// ================= FIREBASE / GOOGLE LOGIN =================
-export const firebaseLogin = async (req, res) => {
+// ================= SOCIAL LOGIN (DB-FIRST) =================
+export const socialLogin = async (req, res) => {
     try {
-        const { token } = req.body;
-
-        const decoded = await admin.auth().verifyIdToken(token);
-
-        const email = decoded.email;
-        const name = decoded.name || "No Name";
-        const photo = decoded.picture || "";
+        const { email, name, photo, provider, providerId } = req.body;
 
         if (!email) {
             return res.status(400).json({
                 success: false,
-                message: "No email from Firebase",
+                message: "Email is required for social login",
             });
         }
 
-        // STEP 1: existing user (same lookup as auth middleware — case-insensitive)
-        let user = await findUserByFirebaseEmail(email);
+        const emailNorm = String(email).toLowerCase().trim();
+        let user = await User.findOne({ email: emailNorm });
 
-        // STEP 2: create only if no document matches this Firebase email
+        // Create social user in DB on first login.
         if (!user) {
             user = await User.create({
-                name,
-                email: String(email).toLowerCase().trim(),
-                photo,
+                name: name?.trim() || "Social User",
+                email: emailNorm,
+                photo: photo || null,
+                uid: providerId || null,
                 role: "user",
             });
+        } else {
+            const updates = {};
+            if (photo && photo !== user.photo) updates.photo = photo;
+            if (providerId && providerId !== user.uid) updates.uid = providerId;
+            if (name?.trim() && name.trim() !== user.name) updates.name = name.trim();
+            if (Object.keys(updates).length > 0) {
+                user = await User.findByIdAndUpdate(user._id, updates, { new: true });
+            }
         }
-
-
 
         const { token: appToken, expiresAt } = signAppJwt(user);
 
         return res.json({
             success: true,
+            provider: provider || "social",
             token: appToken,
             expiresAt,
             user,
         });
 
     } catch (err) {
-        console.log("Firebase error:", err);
+        console.log("Social login error:", err);
         return res.status(401).json({
             success: false,
-            message: "Firebase login failed",
+            message: "Social login failed",
         });
     }
 };
@@ -127,5 +149,114 @@ export const getMe = async (req, res) => {
 
     } catch (err) {
         res.status(500).json({ msg: err.message });
+    }
+};
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const email = String(req.body?.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).json({ message: "Email is required" });
+        }
+
+        const user = await User.findOne({ email });
+        // Do not reveal user existence to avoid email enumeration.
+        if (!user) {
+            return res.json({ success: true, message: "If account exists, reset code was sent." });
+        }
+        const recipientEmail = String(user.email || email).toLowerCase().trim();
+
+        const code = String(crypto.randomInt(100000, 1000000));
+        const codeHash = await bcrypt.hash(code, 10);
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        await User.findByIdAndUpdate(user._id, {
+            resetCodeHash: codeHash,
+            resetCodeExpiresAt: expiresAt,
+        });
+
+        let emailSent = false;
+        try {
+            emailSent = await sendResetCodeEmail({
+                toEmail: recipientEmail,
+                code,
+                expiresMinutes: 10,
+            });
+        } catch (mailErr) {
+            console.log("Reset mail send failed:", mailErr.message);
+        }
+
+        return res.json({
+            success: true,
+            message: emailSent ? "Reset code sent to email" : "If account exists, reset code was sent.",
+            expiresAt: expiresAt.getTime(),
+        });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not process reset request" });
+    }
+};
+
+export const verifyResetCode = async (req, res) => {
+    try {
+        const email = String(req.body?.email || "").toLowerCase().trim();
+        const code = String(req.body?.code || "").trim();
+        if (!email || !code) {
+            return res.status(400).json({ message: "Email and code are required" });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user?.resetCodeHash || !user?.resetCodeExpiresAt) {
+            return res.status(400).json({ message: "No active reset code" });
+        }
+        if (new Date(user.resetCodeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Reset code expired" });
+        }
+
+        const ok = await bcrypt.compare(code, user.resetCodeHash);
+        if (!ok) {
+            return res.status(400).json({ message: "Invalid reset code" });
+        }
+
+        return res.json({ success: true });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not verify reset code" });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    try {
+        const email = String(req.body?.email || "").toLowerCase().trim();
+        const code = String(req.body?.code || "").trim();
+        const newPassword = String(req.body?.newPassword || "");
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ message: "Email, code and newPassword are required" });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user?.resetCodeHash || !user?.resetCodeExpiresAt) {
+            return res.status(400).json({ message: "No active reset code" });
+        }
+        if (new Date(user.resetCodeExpiresAt).getTime() < Date.now()) {
+            return res.status(400).json({ message: "Reset code expired" });
+        }
+
+        const ok = await bcrypt.compare(code, user.resetCodeHash);
+        if (!ok) {
+            return res.status(400).json({ message: "Invalid reset code" });
+        }
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await User.findByIdAndUpdate(user._id, {
+            password: hashed,
+            resetCodeHash: null,
+            resetCodeExpiresAt: null,
+        });
+
+        return res.json({ success: true, message: "Password reset successful" });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not reset password" });
     }
 };

@@ -37,3 +37,18 @@ IMGBB_API_KEY=8f4de2e175488bd4ebea8fa976877b06
 # --- Vercel deploy ---
 # Copy all secrets above into Vercel → Project → Settings → Environment Variables (Production + Preview).
 # After deploy, client: VITE_API_BASE_URL=https://YOUR-APP.vercel.app  (no trailing slash)
+
+# ================= SMTP (Forgot Password Mail) =================
+# Gmail example:
+# SMTP_SERVICE=gmail
+# SMTP_USER=yourgmail@gmail.com
+# SMTP_PASS=your_app_password
+# SMTP_FROM="QR Tag Support <yourgmail@gmail.com>"
+#
+# Custom SMTP example:
+# SMTP_HOST=smtp.yourprovider.com
+# SMTP_PORT=587
+# SMTP_SECURE=false
+# SMTP_USER=your_user
+# SMTP_PASS=your_password
+# SMTP_FROM="QR Tag Support <noreply@yourdomain.com>"

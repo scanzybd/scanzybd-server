@@ -1,6 +1,24 @@
-import admin from "../config/firebaseAdmin.js";
+import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import { findUserByFirebaseEmail } from "../utils/findUserByEmail.js";
+
+const buildReqUser = (dbUser) => ({
+    _id: dbUser._id,
+    email: dbUser.email,
+    uid: dbUser.uid || null,
+    role: dbUser.role,
+});
+
+const verifyAppJwt = async (token) => {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const dbUser = await User.findById(decoded.id).lean();
+    if (!dbUser) {
+        throw new Error("User not found in DB");
+    }
+    if (dbUser.isActive === false) {
+        throw new Error("Account is disabled");
+    }
+    return buildReqUser(dbUser);
+};
 
 export const verifyToken = async (req, res, next) => {
     try {
@@ -10,24 +28,7 @@ export const verifyToken = async (req, res, next) => {
             return res.status(401).json({ message: "No token" });
         }
 
-        const decoded = await admin.auth().verifyIdToken(token);
-
-        const dbUser = await findUserByFirebaseEmail(decoded.email);
-
-        if (!dbUser) {
-            return res.status(404).json({ message: "User not found in DB" });
-        }
-
-        if (dbUser.isActive === false) {
-            return res.status(403).json({ message: "Account is disabled" });
-        }
-
-        req.user = {
-            _id: dbUser._id,   // 🔥 FIX HERE
-            email: dbUser.email,
-            uid: decoded.uid,
-            role: dbUser.role,
-        };
+        req.user = await verifyAppJwt(token);
 
         next();
     } catch (err) {
@@ -85,19 +86,8 @@ export const optionalVerifyToken = async (req, res, next) => {
             return next();
         }
 
-        const decoded = await admin.auth().verifyIdToken(token);
-        const dbUser = await findUserByFirebaseEmail(decoded.email);
-
-        if (!dbUser || dbUser.isActive === false) {
-            return next();
-        }
-
-        req.user = {
-            _id: dbUser._id,
-            email: dbUser.email,
-            uid: decoded.uid,
-            role: dbUser.role,
-        };
+        req.user = await verifyAppJwt(token);
+        return next();
     } catch {
         // ignore — treat as anonymous (e.g. storefront catalog)
     }

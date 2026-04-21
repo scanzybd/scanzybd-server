@@ -1,6 +1,5 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
-import admin from "../config/firebaseAdmin.js";
 
 const ALLOWED_CREATE_ROLES = ["user", "provider"];
 
@@ -86,26 +85,6 @@ export const createUserByAdmin = async (req, res) => {
             return res.status(400).json({ message: "Email already registered" });
         }
 
-        let firebaseUid = null;
-        try {
-            const fbUser = await admin.auth().createUser({
-                email: emailNorm,
-                password: String(password),
-                displayName: name.trim(),
-            });
-            firebaseUid = fbUser.uid;
-        } catch (e) {
-            if (e?.code === "auth/email-already-exists") {
-                return res.status(400).json({
-                    message: "Email already registered in authentication",
-                });
-            }
-            console.error("Firebase createUser:", e);
-            return res.status(500).json({
-                message: e?.message || "Could not create authentication account",
-            });
-        }
-
         const hashed = await bcrypt.hash(String(password), 10);
 
         try {
@@ -113,7 +92,6 @@ export const createUserByAdmin = async (req, res) => {
                 name: name.trim(),
                 email: emailNorm,
                 password: hashed,
-                uid: firebaseUid,
                 role,
             });
 
@@ -122,7 +100,6 @@ export const createUserByAdmin = async (req, res) => {
 
             res.status(201).json({ success: true, data: safe });
         } catch (err) {
-            await admin.auth().deleteUser(firebaseUid).catch(() => {});
             res.status(500).json({ message: err.message });
         }
     } catch (err) {

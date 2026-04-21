@@ -45,6 +45,14 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        resetCodeHash: {
+            type: String,
+            default: null,
+        },
+        resetCodeExpiresAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true, // 🔥 createdAt, updatedAt
