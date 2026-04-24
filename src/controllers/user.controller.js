@@ -110,20 +110,43 @@ export const createUserByAdmin = async (req, res) => {
 export const updateUserStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { isActive } = req.body;
+        const { isActive, name, role } = req.body;
+        const updates = {};
 
-        if (typeof isActive !== "boolean") {
-            return res.status(400).json({ message: "isActive boolean required" });
+        if (isActive !== undefined) {
+            if (typeof isActive !== "boolean") {
+                return res.status(400).json({ message: "isActive must be boolean" });
+            }
+            updates.isActive = isActive;
         }
 
-        if (req.user._id.toString() === id && isActive === false) {
+        if (name !== undefined) {
+            const trimmedName = String(name || "").trim();
+            if (!trimmedName) {
+                return res.status(400).json({ message: "Name is required" });
+            }
+            updates.name = trimmedName;
+        }
+
+        if (role !== undefined) {
+            if (!["admin", "provider", "user"].includes(role)) {
+                return res.status(400).json({ message: "Invalid role" });
+            }
+            updates.role = role;
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: "No valid fields to update" });
+        }
+
+        if (req.user._id.toString() === id && updates.isActive === false) {
             return res.status(400).json({ message: "You cannot deactivate your own account" });
         }
 
         const user = await User.findByIdAndUpdate(
             id,
-            { isActive },
-            { new: true }
+            updates,
+            { new: true, runValidators: true }
         ).select("-password");
 
         if (!user) {

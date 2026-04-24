@@ -53,18 +53,25 @@ export const login = async (req, res) => {
             return res.status(400).json({ msg: "Email and password are required" });
         }
 
+        const usersWithEmail = await User.find({ email }).sort({ createdAt: -1 });
+        if (!usersWithEmail.length) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        // Hard block by email if any matching account is disabled.
+        if (usersWithEmail.some((u) => u.isActive === false)) {
+            return res.status(403).json({ msg: "Account is disabled" });
+        }
+
         // Prefer DB account that actually has a password (in case a social-only record also exists).
-        let user = await User.findOne({
-            email,
-            password: { $type: "string", $ne: "" },
-        }).sort({ createdAt: -1 });
+        let user = usersWithEmail.find(
+            (u) => typeof u.password === "string" && u.password !== ""
+        );
 
         // Fallback: any account with this email (for better error messaging).
         if (!user) {
-            user = await User.findOne({ email }).sort({ createdAt: -1 });
+            user = usersWithEmail[0];
         }
-
-        if (!user) return res.status(404).json({ msg: "User not found" });
         if (!user.password || typeof user.password !== "string") {
             return res.status(400).json({
                 msg: "Password is not set for this account. Use Forgot Password to set a new password, then login with email and password.",
@@ -95,7 +102,14 @@ export const socialLogin = async (req, res) => {
         }
 
         const emailNorm = String(email).toLowerCase().trim();
-        let user = await User.findOne({ email: emailNorm });
+        const usersWithEmail = await User.find({ email: emailNorm }).sort({ createdAt: -1 });
+        if (usersWithEmail.some((u) => u.isActive === false)) {
+            return res.status(403).json({
+                success: false,
+                message: "Account is disabled",
+            });
+        }
+        let user = usersWithEmail[0] || null;
 
         // Create social user in DB on first login.
         if (!user) {
