@@ -31,3 +31,32 @@ export const getAllContacts = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const updateContactStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body || {};
+
+        if (status !== "read" && status !== "unread") {
+            return res.status(400).json({ message: "status must be read or unread" });
+        }
+
+        const updated = await Contact.findByIdAndUpdate(
+            id,
+            { $set: { status } },
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        res.json({
+            success: true,
+            message: "Status updated",
+            data: updated,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};

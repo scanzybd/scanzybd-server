@@ -32,10 +32,10 @@
 
 ; # ================= SMTP (Forgot Password Mail) =================
 ; # Gmail use করলে SMTP_SERVICE দিন; custom SMTP use করলে SMTP_HOST/PORT/SECURE দিন।
-; SMTP_SERVICE=gmail
-; SMTP_HOST=
-; SMTP_PORT=587
-; SMTP_SECURE=false
-; SMTP_USER=abdu95873@gmail.com
-; SMTP_PASS=gblcejbthspmwkfx
-; SMTP_FROM="QR Tag Support <abdu95873@gmail.com>"
+#  SMTP_SERVICE=gmail
+#  SMTP_HOST=
+#  SMTP_PORT=587
+# SMTP_SECURE=false
+# SMTP_USER=scanzybd@gmail.com
+# SMTP_PASS=fssaymonmhvlyzra
+# SMTP_FROM="ScanzyBD Support <scanzybd@gmail.com>"

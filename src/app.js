@@ -13,6 +13,7 @@ import contactRoutes from "./routes/contactRoutes.js"; // 🔥 ADD THIS
 import uploadRoutes from "./routes/uploadRoutes.js";
 import expenseRoutes from "./routes/expenseRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 
 
 const app = express();
@@ -36,5 +37,6 @@ app.use("/api/contact", contactRoutes); // 🔥 ADD THI  S
 app.use("/api/upload", uploadRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 export default app;
