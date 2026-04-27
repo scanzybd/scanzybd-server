@@ -1,0 +1,41 @@
+; # ================= MongoDB =================
+
+
+; DB_USER=qrTag
+; DB_PASS=x7pKMAxJkF2odA29
+; JWT_SECRET=a0819294430b3ec21f2ff70241308fbfe420d6b5311be2dc1087c48cc24efcfe
+
+
+
+; PORT=5000
+
+
+; # ================= BKASH =================
+; BKASH_BASE_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout
+
+; BKASH_APP_KEY=4f6o0cjiki2rfm34kfdadl1eqq
+; BKASH_APP_SECRET=2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b
+; BKASH_USERNAME=sandboxTokenizedUser02
+; BKASH_PASSWORD=sandboxTokenizedUser02@12345
+
+; BKASH_GRANT_TOKEN_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant
+; BKASH_CREATE_PAYMENT_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/create
+; BKASH_EXECUTE_PAYMENT_URL=https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute
+
+; BKASH_BACKEND_CALLBACK_URL=http://localhost:5000/api/payment/bkash/callback
+
+; BKASH_FRONTEND_SUCCESS_URL=http://localhost:5173/user/payment/success
+; BKASH_FRONTEND_FAIL_URL=http://localhost:5173/user/payment/failed
+
+; # ImgBB (product image upload — same key you may use client-side only for reference)
+; IMGBB_API_KEY=8f4de2e175488bd4ebea8fa976877b06
+
+; # ================= SMTP (Forgot Password Mail) =================
+; # Gmail use করলে SMTP_SERVICE দিন; custom SMTP use করলে SMTP_HOST/PORT/SECURE দিন।
+; SMTP_SERVICE=gmail
+; SMTP_HOST=
+; SMTP_PORT=587
+; SMTP_SECURE=false
+; SMTP_USER=abdu95873@gmail.com
+; SMTP_PASS=gblcejbthspmwkfx
+; SMTP_FROM="QR Tag Support <abdu95873@gmail.com>"
