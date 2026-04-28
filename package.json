@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
     "deploy:vercel": "vercel --prod",
     "vercel:dev": "vercel dev"
   },
