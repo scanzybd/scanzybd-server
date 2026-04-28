@@ -23,6 +23,9 @@ connectDB().catch((err) => {
 app.get('/', (req, res) => {
     res.send('Abdullah is sitting here. So Enjoy... Your server is running!');
 })
+app.get("/health", (req, res) => {
+    res.status(200).send("OK");
+});
 
 // Server start
 app.listen(PORT, () => {
