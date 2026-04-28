@@ -1,5 +1,5 @@
 {
-  "name": "qr-tag-server",
+  "name": "qr-tag-server add",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
