@@ -1,3 +1,7 @@
 node_modules
 .env
 .vercel
+<<<<<<< HEAD
+=======
+src/config/firebaseServiceKey.json
+>>>>>>> 2429b2b (Initial commit)
