@@ -6,6 +6,12 @@ const orderSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User"
         },
+        orderNo: {
+            type: String,
+            required: true,
+            unique: true,
+            trim: true,
+        },
 
         items: [
             {
@@ -33,6 +39,7 @@ const orderSchema = new mongoose.Schema(
             default: [],
         },
 
+
         /** Delivery / contact for shipping the physical tags */
         shippingAddress: {
             fullName: { type: String, trim: true, default: "" },
@@ -51,7 +58,7 @@ const orderSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["pending", "paid", "cancelled"],
+            enum: ["pending", "paid", "confirmed", "shipped", "delivered", "returned", "cancelled"],
             default: "pending",
         },
 

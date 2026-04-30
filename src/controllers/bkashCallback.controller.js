@@ -78,7 +78,7 @@ export const bkashCallback = async (req, res) => {
 
         if (payment?.orderId) {
             await Order.findByIdAndUpdate(payment.orderId, {
-                status: "paid",
+                status: "confirmed",
                 paymentStatus: "paid",
             });
         }

@@ -21,6 +21,23 @@ const vehicleSchema = new mongoose.Schema(
             trim: true,
             required: true,
         },
+        ownerContactVisible: {
+            type: Boolean,
+            default: true,
+        },
+        emergencyPhone: {
+            type: String,
+            trim: true,
+            required: true,
+        },
+        emergencyContactVisible: {
+            type: Boolean,
+            default: false,
+        },
+        driverContactVisible: {
+            type: Boolean,
+            default: true,
+        },
         driver: {
             name: String,
             phone: String,

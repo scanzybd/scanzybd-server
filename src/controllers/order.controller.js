@@ -1,6 +1,23 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Vehicle from "../models/Vehicle.js";
+import Counter from "../models/Counter.js";
+
+const nextOrderNo = async () => {
+    const row = await Counter.findOneAndUpdate(
+        { key: "order_no" },
+        {
+            $setOnInsert: { seq: -1 },
+            $inc: { seq: 1 },
+        },
+        {
+            new: true,
+            upsert: true,
+        }
+    ).lean();
+
+    return String(row.seq).padStart(5, "0");
+};
 
 /** Product _id strings for items this provider added to the catalog */
 const providerProductIds = async (email) => {
@@ -63,6 +80,12 @@ export const createOrder = async (req, res) => {
             });
         }
 
+        if (!/^\d{11}$/.test(shippingAddress.phone)) {
+            return res.status(400).json({
+                message: "Delivery address phone must be exactly 11 digits.",
+            });
+        }
+
         const totalQty = cartItems.reduce(
             (sum, i) => sum + Math.max(1, Number(i.quantity) || 1),
             0
@@ -83,12 +106,28 @@ export const createOrder = async (req, res) => {
             const model = String(slot.model || "").trim();
             const plateRaw = String(slot.plate || "").trim();
             const ownerPhone = String(slot.ownerPhone || "").trim();
+            const emergencyPhone = String(slot.emergencyPhone || "").trim();
+            const ownerContactVisible = slot.ownerContactVisible !== false;
+            const driverContactVisible = slot.driverContactVisible !== false;
+            const emergencyContactVisible = Boolean(slot.emergencyContactVisible);
             const productId = String(slot.productId || "").trim();
             const productTitle = String(slot.productTitle || "").trim();
 
-            if (!vehicleName || !model || !plateRaw || !ownerPhone || !productId) {
+            if (!vehicleName || !model || !plateRaw || !ownerPhone || !emergencyPhone || !productId) {
                 return res.status(400).json({
-                    message: `Tag ${i + 1}: fill vehicle name, model, plate, and owner phone.`,
+                    message: `Tag ${i + 1}: fill vehicle name, model, plate, owner phone, and emergency phone.`,
+                });
+            }
+
+            if (!/^\d{11}$/.test(ownerPhone)) {
+                return res.status(400).json({
+                    message: `Tag ${i + 1}: owner phone must be exactly 11 digits.`,
+                });
+            }
+
+            if (!/^\d{11}$/.test(emergencyPhone)) {
+                return res.status(400).json({
+                    message: `Tag ${i + 1}: emergency phone must be exactly 11 digits.`,
                 });
             }
 
@@ -113,13 +152,24 @@ export const createOrder = async (req, res) => {
                     model,
                     plate,
                     ownerPhone,
+                    emergencyPhone,
+                    ownerContactVisible,
+                    driverContactVisible,
+                    emergencyContactVisible,
                     driver,
                     owner: userId,
                     addedBy: null,
                     qrData: null,
                 });
-            } else if (driver) {
-                vehicle.driver = driver;
+            } else {
+                vehicle.ownerPhone = ownerPhone;
+                vehicle.emergencyPhone = emergencyPhone;
+                vehicle.ownerContactVisible = ownerContactVisible;
+                vehicle.driverContactVisible = driverContactVisible;
+                vehicle.emergencyContactVisible = emergencyContactVisible;
+                if (driver) {
+                    vehicle.driver = driver;
+                }
                 await vehicle.save();
             }
 
@@ -132,6 +182,7 @@ export const createOrder = async (req, res) => {
 
         const order = await Order.create({
             userId,
+            orderNo: await nextOrderNo(),
             items: cartItems,
             tagAssignments,
             shippingAddress,
@@ -143,6 +194,7 @@ export const createOrder = async (req, res) => {
         res.status(201).json({
             success: true,
             orderId: order._id,
+            orderNo: order.orderNo,
         });
     } catch (error) {
         console.log(error);
@@ -187,7 +239,68 @@ export const getPendingOrders = async (req, res) => {
 
 export const getCompletedOrders = async (req, res) => {
     try {
-        const q = await providerOrderQuery(req, { status: "paid" });
+        const { from, to } = req.query;
+        const filter = { status: { $in: ["confirmed", "paid"] } };
+        if (from || to) {
+            const createdAt = {};
+            if (from) {
+                createdAt.$gte = new Date(`${from}T00:00:00.000Z`);
+            }
+            if (to) {
+                createdAt.$lte = new Date(`${to}T23:59:59.999Z`);
+            }
+            filter.createdAt = createdAt;
+        }
+
+        const q = await providerOrderQuery(req, filter);
+        if (q === null) {
+            return res.json([]);
+        }
+        const orders = await Order.find(q)
+            .populate("userId")
+            .sort({ createdAt: -1 });
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const getShippedOrders = async (req, res) => {
+    try {
+        const q = await providerOrderQuery(req, { status: "shipped" });
+        if (q === null) {
+            return res.json([]);
+        }
+        const orders = await Order.find(q)
+            .populate("userId")
+            .sort({ createdAt: -1 });
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const getDeliveredOrders = async (req, res) => {
+    try {
+        const q = await providerOrderQuery(req, { status: "delivered" });
+        if (q === null) {
+            return res.json([]);
+        }
+        const orders = await Order.find(q)
+            .populate("userId")
+            .sort({ createdAt: -1 });
+
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const getReturnedOrders = async (req, res) => {
+    try {
+        const q = await providerOrderQuery(req, { status: "returned" });
         if (q === null) {
             return res.json([]);
         }
@@ -234,5 +347,40 @@ export const getMyOrders = async (req, res) => {
         res.json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+export const updateOrderStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const nextStatus = String(req.body?.status || "").trim().toLowerCase();
+        const allowedStatuses = ["confirmed", "shipped", "delivered", "returned", "cancelled"];
+
+        if (!allowedStatuses.includes(nextStatus)) {
+            return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const q = await providerOrderQuery(req, { _id: id });
+        if (q === null) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        const updated = await Order.findOneAndUpdate(
+            q,
+            { status: nextStatus },
+            { new: true }
+        ).populate("userId");
+
+        if (!updated) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        return res.json({
+            success: true,
+            message: "Order status updated",
+            order: updated,
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };

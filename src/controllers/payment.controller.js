@@ -104,7 +104,7 @@ export const confirmPayment = async (req, res) => {
         const order = await Order.findById(payment.orderId);
 
         if (order) {
-            order.status = "paid";
+            order.status = "confirmed";
             order.paymentStatus = "paid";
             order.transactionId = transactionId;
 

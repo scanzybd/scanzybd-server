@@ -14,6 +14,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import expenseRoutes from "./routes/expenseRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
+import locationRoutes from "./routes/locationRoutes.js";
 
 
 const app = express();
@@ -38,5 +39,6 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/locations", locationRoutes);
 
 export default app;

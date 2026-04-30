@@ -23,7 +23,19 @@ export const addVehicle = async (req, res) => {
     try {
         console.log("BODY:", req.body);
 
-        let { vehicleName, model, plate, ownerPhone, driver, qrData, owner } = req.body;
+        let {
+            vehicleName,
+            model,
+            plate,
+            ownerPhone,
+            emergencyPhone,
+            ownerContactVisible,
+            driverContactVisible,
+            emergencyContactVisible,
+            driver,
+            qrData,
+            owner,
+        } = req.body;
         const role = req.user?.role;
         let addedBy = null;
 
@@ -62,6 +74,10 @@ export const addVehicle = async (req, res) => {
             model,
             plate,
             ownerPhone,
+            emergencyPhone,
+            ownerContactVisible: ownerContactVisible ?? true,
+            driverContactVisible: driverContactVisible ?? true,
+            emergencyContactVisible: emergencyContactVisible ?? false,
             driver,
             qrData,
             owner,
@@ -141,7 +157,18 @@ export const updateVehicle = async (req, res) => {
         console.log("PARAM ID:", id);
         console.log("USER ID:", req.user._id);
 
-        const { vehicleName, model, plate, ownerPhone, driver, qrData } = req.body;
+        const {
+            vehicleName,
+            model,
+            plate,
+            ownerPhone,
+            emergencyPhone,
+            ownerContactVisible,
+            driverContactVisible,
+            emergencyContactVisible,
+            driver,
+            qrData,
+        } = req.body;
 
         const vehicle = await Vehicle.findById(id);
 
@@ -163,6 +190,10 @@ export const updateVehicle = async (req, res) => {
         vehicle.model = model ?? vehicle.model;
         vehicle.plate = plate ?? vehicle.plate;
         vehicle.ownerPhone = ownerPhone ?? vehicle.ownerPhone;
+        vehicle.emergencyPhone = emergencyPhone ?? vehicle.emergencyPhone;
+        vehicle.ownerContactVisible = ownerContactVisible ?? vehicle.ownerContactVisible;
+        vehicle.driverContactVisible = driverContactVisible ?? vehicle.driverContactVisible;
+        vehicle.emergencyContactVisible = emergencyContactVisible ?? vehicle.emergencyContactVisible;
 
         vehicle.driver = driver ?? vehicle.driver;
         vehicle.qrData = qrData ?? vehicle.qrData;
