@@ -7,7 +7,8 @@ const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
         { key: "order_no" },
         {
-            $setOnInsert: { seq: -1 },
+            // Do not set and increment same path in one update (Mongo conflict).
+            $setOnInsert: { key: "order_no" },
             $inc: { seq: 1 },
         },
         {
