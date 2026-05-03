@@ -15,12 +15,14 @@ import expenseRoutes from "./routes/expenseRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import locationRoutes from "./routes/locationRoutes.js";
-
+import { installApiResponseCache } from "./middleware/apiResponseCache.js";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "12mb" }));
+
+installApiResponseCache(app);
 
 app.get("/", (req, res) => {
   res.type("text").send("QR Tag API — use /api/* routes.");

@@ -12,6 +12,8 @@ export const connectDB = async () => {
         const dbUser = encodeURIComponent(String(process.env.DB_USER || "").trim());
         const dbPass = encodeURIComponent(String(process.env.DB_PASS || "").trim());
         const defaultUri = `mongodb+srv://${dbUser}:${dbPass}@cluster0.zzqq3aq.mongodb.net/scanzybd_db?appName=Cluster0`;
+        // const defaultUri = process.env.MONGODB_URI;
+
 
 
         const uri = explicitUri || defaultUri;

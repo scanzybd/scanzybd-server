@@ -4,6 +4,7 @@
 ; DB_USER=qrTag
 ; DB_PASS=x7pKMAxJkF2odA29
 ; JWT_SECRET=a0819294430b3ec21f2ff70241308fbfe420d6b5311be2dc1087c48cc24efcfe
+# MONGODB_URI=mongodb://scanzybd_db:fQuPoJBMf06TEgwG@ac-mazj4lj-shard-00-00.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-01.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-02.zzqq3aq.mongodb.net:27017/scanzybd_db?ssl=true&replicaSet=atlas-7q9jwz-shard-0&authSource=admin&appName=Cluster0
 
 
 
@@ -39,3 +40,8 @@
 # SMTP_USER=scanzybd@gmail.com
 # SMTP_PASS=fssaymonmhvlyzra
 # SMTP_FROM="ScanzyBD Support <scanzybd@gmail.com>"
+
+# ================= API response cache (GET /api/* JSON) =================
+# API_CACHE_ENABLED=true
+# API_CACHE_TTL_MS=300000
+# API_CACHE_MAX=500
