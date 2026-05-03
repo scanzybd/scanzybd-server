@@ -11,7 +11,9 @@ export const connectDB = async () => {
         const explicitUri = process.env.MONGODB_URI?.trim();
         const dbUser = encodeURIComponent(String(process.env.DB_USER || "").trim());
         const dbPass = encodeURIComponent(String(process.env.DB_PASS || "").trim());
-        const defaultUri = `mongodb://${dbUser}:${dbPass}@ac-mihdfkl-shard-00-00.mh16alw.mongodb.net:27017,ac-mihdfkl-shard-00-01.mh16alw.mongodb.net:27017,ac-mihdfkl-shard-00-02.mh16alw.mongodb.net:27017/qrTag?authSource=admin&replicaSet=atlas-2rjx63-shard-0&tls=true&retryWrites=true&w=majority`;
+        const defaultUri = `mongodb+srv://${dbUser}:${dbPass}@cluster0.zzqq3aq.mongodb.net/scanzybd_db?appName=Cluster0`;
+
+
         const uri = explicitUri || defaultUri;
 
         if (!uri || (!explicitUri && (!dbUser || !dbPass))) {
