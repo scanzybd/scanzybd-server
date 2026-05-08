@@ -147,4 +147,9 @@ This code expires in ${expiresMinutes} minutes.
 
         return false;
     }
+    console.log("Accepted:", info.accepted);
+
+    console.log("Rejected:", info.rejected);
+
+    console.log("Response:", info.response);
 }
