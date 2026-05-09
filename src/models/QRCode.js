@@ -36,6 +36,11 @@ const qrSchema = new mongoose.Schema(
             type: String,
             default: "bike",
         },
+        batchNumber: {
+            type: Number,
+            required: true,
+            index: true,
+        },
     },
     { timestamps: true }
 );

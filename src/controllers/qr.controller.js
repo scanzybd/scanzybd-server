@@ -1,6 +1,8 @@
 import QRModel from "../models/QRCode.js";
 import QRCodeLib from "qrcode";
 import Vehicle from "../models/Vehicle.js";
+import { nanoid } from "nanoid";
+
 
 /**
  * ASSIGN QR TO VEHICLE
@@ -71,38 +73,80 @@ export const generateQRs = async (req, res) => {
   try {
     const { count, qrType: rawType } = req.body;
 
+    // ✅ allowed QR types
     const allowedTypes = ["bike", "car"];
+
+    // ✅ sanitize qr type
     const qrType =
-      typeof rawType === "string" && allowedTypes.includes(rawType.trim().toLowerCase())
+      typeof rawType === "string" &&
+        allowedTypes.includes(rawType.trim().toLowerCase())
         ? rawType.trim().toLowerCase()
         : "bike";
 
-    const baseUrl = "http://localhost:5173/qr-landing";
+    // ✅ base url
+    const baseUrl = "http://scanzybd.com/qr-landing";
+
+    // ✅ get last batch
+    const lastQR = await QRModel.findOne({})
+      .sort({ batchNumber: -1 })
+      .lean();
+
+    // ✅ next batch number
+    let batchNumber = 1;
+
+    if (lastQR?.batchNumber) {
+      batchNumber = lastQR.batchNumber + 1;
+    }
+
+    // ✅ formatted batch label
+    const batchLabel = String(batchNumber).padStart(4, "0");
+
     const list = [];
 
+    // ✅ generate QR codes
     for (let i = 0; i < count; i++) {
-      const code = `QR-${Date.now()}-${i}`;
+
+      // serial number
+      const serial = String(i + 1).padStart(3, "0");
+
+      // random unique part
+      const random = nanoid(8);
+
+      // final QR code
+      const code = `QR-B${batchLabel}-${serial}-${random}`;
+
+      // qr redirect link
       const qrLink = `${baseUrl}/${code}`;
 
+      // qr image
       const qrImage = await QRCodeLib.toDataURL(qrLink);
 
+      // save to DB
       const qr = await QRModel.create({
         code,
         qrCode: qrImage,
         qrLink,
         isAssigned: false,
         qrType,
+        batchNumber,
       });
 
       list.push(qr);
     }
 
+    // ✅ success response
     res.status(201).json({
       success: true,
+      batchNumber,
+      batchLabel,
+      totalGenerated: list.length,
       data: list,
     });
 
   } catch (err) {
+
+    console.error("QR GENERATE ERROR:", err);
+
     res.status(500).json({
       success: false,
       message: err.message,
@@ -127,10 +171,10 @@ export const scanQR = async (req, res) => {
     await qr.save();
 
     if (!qr.isAssigned) {
-      return res.redirect("http://localhost:5173/dashboard/assign-vehicle");
+      return res.redirect("http://scanzybd.com/dashboard/assign-vehicle");
     }
 
-    return res.redirect(`http://localhost:5123/vehicle/${qr.vehicleId}`);
+    return res.redirect(`http://scanzybd.com/vehicle/${qr.vehicleId}`);
 
   } catch (err) {
     res.status(500).send(err.message);
