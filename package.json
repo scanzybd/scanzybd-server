@@ -38,6 +38,7 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.5",
     "qrcode": "^1.5.4",
+    "svg2pdf.js": "^2.7.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
