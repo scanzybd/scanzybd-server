@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Car Tag",
+    "isCycle": false,
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "name": "Bike Tag",
+    "isCycle": false,
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "name": "Helmet Tag",
+    "isCycle": false,
+    "sortOrder": 3,
+    "isActive": true
+  },
+  {
+    "name": "Truck Tag",
+    "isCycle": false,
+    "sortOrder": 4,
+    "isActive": true
+  },
+  {
+    "name": "Van Tag",
+    "isCycle": false,
+    "sortOrder": 5,
+    "isActive": true
+  },
+  {
+    "name": "Bus Tag",
+    "isCycle": false,
+    "sortOrder": 6,
+    "isActive": true
+  },
+  {
+    "name": "Cycle Tag",
+    "isCycle": true,
+    "sortOrder": 7,
+    "isActive": true
+  }
+]

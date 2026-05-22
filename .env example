@@ -1,10 +1,12 @@
 ; # ================= MongoDB =================
 
 
-; DB_USER=qrTag
-; DB_PASS=x7pKMAxJkF2odA29
-; JWT_SECRET=a0819294430b3ec21f2ff70241308fbfe420d6b5311be2dc1087c48cc24efcfe
-# MONGODB_URI=mongodb://scanzybd_db:fQuPoJBMf06TEgwG@ac-mazj4lj-shard-00-00.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-01.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-02.zzqq3aq.mongodb.net:27017/scanzybd_db?ssl=true&replicaSet=atlas-7q9jwz-shard-0&authSource=admin&appName=Cluster0
+; DB_USER=scanzybd_db
+; DB_PASS=your_password
+; JWT_SECRET=your_jwt_secret
+; Prefer direct URI on Windows (avoids querySrv EREFUSED):
+; MONGODB_URI=mongodb://USER:PASS@ac-mazj4lj-shard-00-00.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-01.zzqq3aq.mongodb.net:27017,ac-mazj4lj-shard-00-02.zzqq3aq.mongodb.net:27017/scanzybd_db?ssl=true&replicaSet=atlas-7q9jwz-shard-0&authSource=admin&appName=Cluster0
+; Optional: MONGODB_USE_SRV=true to also try mongodb+srv:// (needs working DNS SRV)
 
 
 

@@ -73,7 +73,10 @@ export const createUserByAdmin = async (req, res) => {
             });
         }
 
-        if (!ALLOWED_CREATE_ROLES.includes(role)) {
+        let targetRole = role;
+        if (req.user?.role === "provider") {
+            targetRole = "user";
+        } else if (!ALLOWED_CREATE_ROLES.includes(role)) {
             return res.status(400).json({
                 message: "Role must be user or provider",
             });
@@ -92,7 +95,7 @@ export const createUserByAdmin = async (req, res) => {
                 name: name.trim(),
                 email: emailNorm,
                 password: hashed,
-                role,
+                role: targetRole,
             });
 
             const safe = user.toObject();

@@ -46,6 +46,8 @@ const orderSchema = new mongoose.Schema(
             phone: { type: String, trim: true, default: "" },
             line1: { type: String, trim: true, default: "" },
             line2: { type: String, trim: true, default: "" },
+            union: { type: String, trim: true, default: "" },
+            upazila: { type: String, trim: true, default: "" },
             city: { type: String, trim: true, default: "" },
             district: { type: String, trim: true, default: "" },
             postalCode: { type: String, trim: true, default: "" },
@@ -58,14 +60,45 @@ const orderSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["pending", "paid", "confirmed", "shipped", "delivered", "returned", "cancelled"],
+            enum: [
+                "pending",
+                "processing",
+                "completed",
+                "paid",
+                "confirmed",
+                "shipped",
+                "delivered",
+                "returned",
+                "cancelled",
+            ],
             default: "pending",
         },
 
         paymentStatus: {
             type: String,
-            enum: ["unpaid", "paid"],
+            enum: ["unpaid", "paid", "failed"],
             default: "unpaid",
+        },
+
+        /** Staff-created order metadata */
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        paymentMethod: {
+            type: String,
+            enum: ["bkash_online", "cash", "bkash_manual", "bkash"],
+            default: "bkash_online",
+        },
+        completedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        completedAt: {
+            type: Date,
+            default: null,
         },
     },
     {

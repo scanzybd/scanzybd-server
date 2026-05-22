@@ -9,30 +9,41 @@ import {
     getPendingOrders,
     getReturnedOrders,
     getShippedOrders,
-    updateOrderStatus,
 } from "../controllers/order.controller.js";
-import { isProvider, verifyToken } from "../middleware/auth.js";
-
-
+import {
+    staffCreateOrder,
+    completeOrder,
+    updateStaffOrderStatus,
+    deleteStaffOrder,
+    updateOrderPayment,
+    getStaffOrders,
+    getOrderById,
+    getDashboardAnalytics,
+} from "../controllers/staffOrder.controller.js";
+import { isAdmin, isAdminOrProvider, isProvider, verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
-// create order
 
 router.post("/create", verifyToken, createOrder);
+router.post("/staff-create", verifyToken, isAdminOrProvider, staffCreateOrder);
 
-
-// get all orders (admin or protected)
+router.get("/my-orders", verifyToken, getMyOrders);
+router.get("/dashboard-analytics", verifyToken, isAdminOrProvider, getDashboardAnalytics);
+router.get("/staff-orders", verifyToken, isAdminOrProvider, getStaffOrders);
 
 router.get("/", verifyToken, isProvider, getAllOrders);
 router.get("/pending", verifyToken, isProvider, getPendingOrders);
-router.get("/completed", verifyToken, isProvider, getCompletedOrders);
-router.get("/shipped", verifyToken, isProvider, getShippedOrders);
-router.get("/delivered", verifyToken, isProvider, getDeliveredOrders);
 router.get("/returned", verifyToken, isProvider, getReturnedOrders);
 router.get("/cancelled", verifyToken, isProvider, getCancelledOrders);
-router.patch("/:id/status", verifyToken, isProvider, updateOrderStatus);
+router.get("/completed", verifyToken, isProvider, getCompletedOrders);
+router.get("/shipped", verifyToken, isAdmin, getShippedOrders);
+router.get("/delivered", verifyToken, isAdmin, getDeliveredOrders);
 
-// get logged-in user's orders
-router.get("/my-orders", verifyToken, getMyOrders);
+router.patch("/:orderId/complete", verifyToken, isAdmin, completeOrder);
+router.patch("/:orderId/payment", verifyToken, isAdmin, updateOrderPayment);
+router.patch("/:orderId/status", verifyToken, isAdmin, updateStaffOrderStatus);
+router.delete("/:orderId", verifyToken, isAdmin, deleteStaffOrder);
+
+router.get("/:orderId", verifyToken, getOrderById);
 
 export default router;

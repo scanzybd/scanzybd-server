@@ -1,4 +1,5 @@
 import axios from "axios";
+import { compressProductImage } from "../utils/compressProductImage.js";
 
 function sanitizeApiKey(raw) {
   if (!raw || typeof raw !== "string") return "";
@@ -48,6 +49,17 @@ export const uploadToImgbb = async (req, res) => {
       base64 = base64.split("base64,")[1];
     }
     base64 = base64.replace(/\s/g, "");
+
+    try {
+      const rawBuffer = Buffer.from(base64, "base64");
+      const compressed = await compressProductImage(rawBuffer);
+      base64 = compressed.toString("base64");
+    } catch (compressErr) {
+      console.warn(
+        "Product image compression skipped, uploading original:",
+        compressErr.message
+      );
+    }
 
     // Must encode for x-www-form-urlencoded so '+' / '=' in base64 are not corrupted
     const body = `key=${encodeURIComponent(key)}&image=${encodeURIComponent(base64)}`;

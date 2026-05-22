@@ -12,9 +12,12 @@ import orderRoutes from "./routes/orderRoutes.js"; // 🔥 ADD THIS
 import contactRoutes from "./routes/contactRoutes.js"; // 🔥 ADD THIS
 import uploadRoutes from "./routes/uploadRoutes.js";
 import expenseRoutes from "./routes/expenseRoutes.js";
+import financeRoutes from "./routes/financeRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import locationRoutes from "./routes/locationRoutes.js";
+import brtaRoutes from "./routes/brtaRoutes.js";
+import tagTypeRoutes from "./routes/tagTypeRoutes.js";
 import { installApiResponseCache } from "./middleware/apiResponseCache.js";
 
 const app = express();
@@ -39,8 +42,11 @@ app.use("/api/order", orderRoutes); // now OK ✅
 app.use("/api/contact", contactRoutes); // 🔥 ADD THI  S
 app.use("/api/upload", uploadRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/finance", financeRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/locations", locationRoutes);
+app.use("/api", brtaRoutes);
+app.use("/api/tag-types", tagTypeRoutes);
 
 export default app;

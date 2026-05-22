@@ -3,6 +3,7 @@ import {
     generateQRs,
     scanQR,
     assignQRToVehicle,
+    unassignQRFromVehicle,
     getAllQR,
     getQRById,
     getQRByCode,
@@ -24,6 +25,7 @@ router.get("/id/:id", verifyToken, getQRById);
 router.get("/code/:code", getQRByCode); // ✅ specific
 
 router.post("/assign", verifyToken, assignQRToVehicle);
+router.post("/unassign", verifyToken, unassignQRFromVehicle);
 
 // ⚠️ keep wildcard LAST
 router.get("/:code", scanQR);

@@ -108,7 +108,7 @@ export const getAllProducts = async (req, res) => {
     }
 };
 
-/** Dashboard product table — admin & provider see full catalog (edit still restricted in updateProduct) */
+/** Dashboard product table — admin & provider see full catalog (only admin may update) */
 export const getDashboardProducts = async (req, res) => {
     try {
         const result = await Product.find().sort({ createdAt: -1 });
@@ -137,13 +137,10 @@ export const updateProduct = async (req, res) => {
             });
         }
 
-        if (
-            req.user.role === "provider" &&
-            existing.createdBy?.email !== req.user.email
-        ) {
+        if (req.user.role !== "admin") {
             return res.status(403).json({
                 success: false,
-                message: "Not allowed to edit this product",
+                message: "Only admins can update products",
             });
         }
 

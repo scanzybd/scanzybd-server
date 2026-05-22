@@ -1,5 +1,11 @@
 import Vehicle from "../models/Vehicle.js";
 import User from "../models/User.js";
+import QRModel from "../models/QRCode.js";
+import {
+    getQrIdsFromVehicle,
+    normalizeVehicleDoc,
+    syncVehicleQrFields,
+} from "../utils/vehicleQr.js";
 
 const canManageVehicle = (vehicle, reqUser) => {
     if (!vehicle || !reqUser?._id) return false;
@@ -27,6 +33,8 @@ export const addVehicle = async (req, res) => {
             vehicleName,
             model,
             plate,
+            chassisLast4,
+            engineLast4,
             ownerPhone,
             emergencyPhone,
             ownerContactVisible,
@@ -69,24 +77,34 @@ export const addVehicle = async (req, res) => {
             });
         }
 
-        const vehicle = await Vehicle.create({
-            vehicleName,
+        const createPayload = {
+            vehicleName: vehicleName || model || "Vehicle",
             model,
             plate,
+            chassisLast4: chassisLast4 || "",
+            engineLast4: engineLast4 || "",
             ownerPhone,
             emergencyPhone,
             ownerContactVisible: ownerContactVisible ?? true,
             driverContactVisible: driverContactVisible ?? true,
             emergencyContactVisible: emergencyContactVisible ?? false,
             driver,
-            qrData,
             owner,
             addedBy,
-        });
+            qrIds: [],
+            qrData: null,
+        };
+
+        if (qrData) {
+            createPayload.qrIds = [qrData];
+            syncVehicleQrFields(createPayload);
+        }
+
+        const vehicle = await Vehicle.create(createPayload);
 
         res.status(201).json({
             success: true,
-            data: vehicle,
+            data: normalizeVehicleDoc(vehicle),
         });
 
     } catch (err) {
@@ -117,7 +135,7 @@ export const getVehicles = async (req, res) => {
 
         res.json({
             success: true,
-            data: vehicles,
+            data: vehicles.map((v) => normalizeVehicleDoc(v)),
         });
     } catch (error) {
         res.status(500).json({
@@ -136,7 +154,7 @@ export const getMyVehicles = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: vehicles,
+            data: vehicles.map((v) => normalizeVehicleDoc(v)),
         });
 
     } catch (err) {
@@ -196,13 +214,21 @@ export const updateVehicle = async (req, res) => {
         vehicle.emergencyContactVisible = emergencyContactVisible ?? vehicle.emergencyContactVisible;
 
         vehicle.driver = driver ?? vehicle.driver;
-        vehicle.qrData = qrData ?? vehicle.qrData;
+        if (qrData !== undefined) {
+            if (qrData) {
+                vehicle.qrIds = getQrIdsFromVehicle(vehicle);
+                if (!vehicle.qrIds.map(String).includes(String(qrData))) {
+                    vehicle.qrIds.push(qrData);
+                }
+            }
+            syncVehicleQrFields(vehicle);
+        }
 
         await vehicle.save();
 
         res.status(200).json({
             success: true,
-            data: vehicle,
+            data: normalizeVehicleDoc(vehicle),
         });
 
     } catch (err) {
@@ -235,7 +261,22 @@ export const deleteVehicle = async (req, res) => {
             });
         }
 
+        const qrIds = getQrIdsFromVehicle(vehicle);
         await Vehicle.findByIdAndDelete(id);
+
+        if (qrIds.length > 0) {
+            await QRModel.updateMany(
+                { _id: { $in: qrIds } },
+                {
+                    $set: {
+                        vehicleId: null,
+                        isAssigned: false,
+                        status: "unassigned",
+                    },
+                    $unset: { assignedBy: "" },
+                }
+            );
+        }
 
         res.status(200).json({
             success: true,

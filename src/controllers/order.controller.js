@@ -30,6 +30,7 @@ const providerProductIds = async (email) => {
     return rows.map((r) => r._id.toString());
 };
 
+/** Orders that include at least one product this provider added to the catalog. */
 const providerOrderQuery = async (req, extra = {}) => {
     if (req.user.role === "admin") {
         return extra;
@@ -64,6 +65,8 @@ export const createOrder = async (req, res) => {
             phone: String(ship?.phone || "").trim(),
             line1: String(ship?.line1 || "").trim(),
             line2: String(ship?.line2 || "").trim(),
+            union: String(ship?.union || "").trim(),
+            upazila: String(ship?.upazila || "").trim(),
             city: String(ship?.city || "").trim(),
             district: String(ship?.district || "").trim(),
             postalCode: String(ship?.postalCode || "").trim(),
@@ -72,12 +75,13 @@ export const createOrder = async (req, res) => {
         if (
             !shippingAddress.fullName ||
             !shippingAddress.phone ||
-            !shippingAddress.line1 ||
+            !shippingAddress.union ||
+            !shippingAddress.upazila ||
             !shippingAddress.city
         ) {
             return res.status(400).json({
                 message:
-                    "Delivery address required: full name, phone, address line, and city.",
+                    "Delivery address required: full name, phone, union/ward, upazila, and district.",
             });
         }
 
@@ -103,9 +107,10 @@ export const createOrder = async (req, res) => {
 
         for (let i = 0; i < rawSlots.length; i++) {
             const slot = rawSlots[i];
-            const vehicleName = String(slot.vehicleName || "").trim();
             const model = String(slot.model || "").trim();
             const plateRaw = String(slot.plate || "").trim();
+            const chassisLast4 = String(slot.chassisLast4 || "").trim();
+            const engineLast4 = String(slot.engineLast4 || "").trim();
             const ownerPhone = String(slot.ownerPhone || "").trim();
             const emergencyPhone = String(slot.emergencyPhone || "").trim();
             const ownerContactVisible = slot.ownerContactVisible !== false;
@@ -113,11 +118,21 @@ export const createOrder = async (req, res) => {
             const emergencyContactVisible = Boolean(slot.emergencyContactVisible);
             const productId = String(slot.productId || "").trim();
             const productTitle = String(slot.productTitle || "").trim();
+            const vehicleName = String(slot.productTitle || "Vehicle").trim();
 
-            if (!vehicleName || !model || !plateRaw || !ownerPhone || !emergencyPhone || !productId) {
+            if (!model || !plateRaw || !ownerPhone || !emergencyPhone || !productId) {
                 return res.status(400).json({
-                    message: `Tag ${i + 1}: fill vehicle name, model, plate, owner phone, and emergency phone.`,
+                    message: `Tag ${i + 1}: fill manufacture year, plate, owner phone, and emergency phone.`,
                 });
+            }
+
+            const isCyclePlate = !chassisLast4 && !engineLast4;
+            if (!isCyclePlate) {
+                if (!/^\d{4}$/.test(chassisLast4) || !/^\d{4}$/.test(engineLast4)) {
+                    return res.status(400).json({
+                        message: `Tag ${i + 1}: chassis and engine last 4 digits must be exactly 4 numbers.`,
+                    });
+                }
             }
 
             if (!/^\d{11}$/.test(ownerPhone)) {
@@ -152,6 +167,8 @@ export const createOrder = async (req, res) => {
                     vehicleName,
                     model,
                     plate,
+                    chassisLast4: chassisLast4 || undefined,
+                    engineLast4: engineLast4 || undefined,
                     ownerPhone,
                     emergencyPhone,
                     ownerContactVisible,
@@ -160,11 +177,15 @@ export const createOrder = async (req, res) => {
                     driver,
                     owner: userId,
                     addedBy: null,
+                    qrIds: [],
                     qrData: null,
                 });
             } else {
+                vehicle.model = model;
                 vehicle.ownerPhone = ownerPhone;
                 vehicle.emergencyPhone = emergencyPhone;
+                if (chassisLast4) vehicle.chassisLast4 = chassisLast4;
+                if (engineLast4) vehicle.engineLast4 = engineLast4;
                 vehicle.ownerContactVisible = ownerContactVisible;
                 vehicle.driverContactVisible = driverContactVisible;
                 vehicle.emergencyContactVisible = emergencyContactVisible;
@@ -333,19 +354,29 @@ export const getCancelledOrders = async (req, res) => {
 
 export const getMyOrders = async (req, res) => {
     try {
-        console.log("REQ USER:", req.user);
-
         const userId = req.user?._id || req.user?.id;
+        const page = Math.max(1, Number(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
+        const skip = (page - 1) * limit;
 
-        console.log("USER ID:", userId);
+        const filter = { userId };
 
-        const orders = await Order.find({
-            userId: userId, // ✅ FIXED
+        const [orders, total] = await Promise.all([
+            Order.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Order.countDocuments(filter),
+        ]);
+
+        res.json({
+            success: true,
+            orders,
+            total,
+            page,
+            limit,
         });
-
-        console.log("ORDERS:", orders);
-
-        res.json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

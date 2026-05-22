@@ -56,6 +56,17 @@ const paymentSchema = new mongoose.Schema(
 
         completedAt: Date,
         failedAt: Date,
+
+        processedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        note: {
+            type: String,
+            trim: true,
+            default: "",
+        },
     },
     { timestamps: true }
 );

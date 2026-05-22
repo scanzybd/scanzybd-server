@@ -16,6 +16,16 @@ const vehicleSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
+        chassisLast4: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        engineLast4: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         ownerPhone: {
             type: String,
             trim: true,
@@ -43,8 +53,17 @@ const vehicleSchema = new mongoose.Schema(
             phone: String,
         },
 
+        /** Up to 2 separate QR codes per vehicle */
+        qrIds: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "QRCode",
+            },
+        ],
+        /** @deprecated Legacy — kept in sync with first entry in qrIds */
         qrData: {
             type: String,
+            default: null,
         },
 
         owner: {

@@ -1,10 +1,10 @@
 import express from "express";
 import { createExpense, getExpenses } from "../controllers/expense.controller.js";
-import { isProvider, verifyToken } from "../middleware/auth.js";
+import { isAdminOrProvider, verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/", verifyToken, isProvider, getExpenses);
-router.post("/", verifyToken, isProvider, createExpense);
+router.get("/", verifyToken, isAdminOrProvider, getExpenses);
+router.post("/", verifyToken, isAdminOrProvider, createExpense);
 
 export default router;

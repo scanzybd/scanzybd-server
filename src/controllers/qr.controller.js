@@ -2,6 +2,12 @@ import QRModel from "../models/QRCode.js";
 import QRCodeLib from "qrcode";
 import Vehicle from "../models/Vehicle.js";
 import { nanoid } from "nanoid";
+import {
+    MAX_VEHICLE_QRS,
+    canAddQrToVehicle,
+    getQrIdsFromVehicle,
+    syncVehicleQrFields,
+} from "../utils/vehicleQr.js";
 
 
 /**
@@ -24,6 +30,20 @@ export const assignQRToVehicle = async (req, res) => {
       return res.status(404).json({ message: "QR not found" });
     }
 
+    if (qr.isAssigned || qr.status === "assigned") {
+      const existingVehicle = qr.vehicleId ? String(qr.vehicleId) : null;
+      if (existingVehicle && existingVehicle !== String(vehicleId)) {
+        return res.status(400).json({
+          message: "This QR is already assigned to another vehicle",
+        });
+      }
+      if (existingVehicle === String(vehicleId)) {
+        return res.status(400).json({
+          message: "This QR is already assigned to this vehicle",
+        });
+      }
+    }
+
     // 🚗 vehicle check
     const vehicle = await Vehicle.findById(vehicleId);
 
@@ -42,6 +62,21 @@ export const assignQRToVehicle = async (req, res) => {
       }
     }
 
+    const currentIds = getQrIdsFromVehicle(vehicle);
+    const qrIdStr = String(qr._id);
+
+    if (currentIds.includes(qrIdStr)) {
+      return res.status(400).json({
+        message: "This QR is already linked to this vehicle",
+      });
+    }
+
+    if (!canAddQrToVehicle(vehicle)) {
+      return res.status(400).json({
+        message: `Maximum ${MAX_VEHICLE_QRS} QR codes per vehicle`,
+      });
+    }
+
     // ✅ QR update
     qr.vehicleId = vehicleId;
     qr.isAssigned = true;
@@ -50,18 +85,84 @@ export const assignQRToVehicle = async (req, res) => {
 
     await qr.save();
 
-    // ✅ vehicle update (important)
-    vehicle.qrData = qr._id;
+    vehicle.qrIds = [...currentIds, qrIdStr];
+    syncVehicleQrFields(vehicle);
     await vehicle.save();
 
     res.json({
       success: true,
       message: "QR assigned successfully",
       data: qr,
+      vehicleQrCount: getQrIdsFromVehicle(vehicle).length,
     });
 
   } catch (err) {
     console.error("ASSIGN ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * POST /api/qr/unassign — remove one QR from a vehicle (QR becomes unassigned)
+ */
+export const unassignQRFromVehicle = async (req, res) => {
+  try {
+    const { vehicleId, qrId } = req.body || {};
+
+    if (!vehicleId || !qrId) {
+      return res.status(400).json({
+        message: "vehicleId and qrId are required",
+      });
+    }
+
+    const vehicle = await Vehicle.findById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({ message: "Vehicle not found" });
+    }
+
+    if (req.user?.role === "provider") {
+      const uid = req.user._id.toString();
+      const isOwner = vehicle.owner?.toString() === uid;
+      const isRegistrar = vehicle.addedBy?.toString() === uid;
+      if (!isOwner && !isRegistrar) {
+        return res.status(403).json({
+          message: "You can only manage QR on vehicles you own or registered",
+        });
+      }
+    }
+
+    const currentIds = getQrIdsFromVehicle(vehicle);
+    const target = String(qrId);
+    if (!currentIds.includes(target)) {
+      return res.status(400).json({
+        message: "This QR is not linked to the vehicle",
+      });
+    }
+
+    vehicle.qrIds = currentIds.filter((id) => String(id) !== target);
+    syncVehicleQrFields(vehicle);
+    await vehicle.save();
+
+    await QRModel.findByIdAndUpdate(target, {
+      $set: {
+        vehicleId: null,
+        isAssigned: false,
+        status: "unassigned",
+      },
+      $unset: { assignedBy: "" },
+    });
+
+    res.json({
+      success: true,
+      message: "QR removed from vehicle",
+      vehicle: {
+        _id: vehicle._id,
+        qrIds: getQrIdsFromVehicle(vehicle),
+        qrCount: getQrIdsFromVehicle(vehicle).length,
+      },
+    });
+  } catch (err) {
+    console.error("UNASSIGN ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };

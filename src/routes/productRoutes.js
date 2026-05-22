@@ -17,7 +17,7 @@ router.post("/", verifyToken, isAdmin, addProduct);
 router.get("/", getAllProducts);
 router.get("/mine", verifyToken, isProvider, getDashboardProducts);
 router.get("/my/:email", myProducts);
-router.put("/:id", verifyToken, isProvider, updateProduct);
+router.put("/:id", verifyToken, isAdmin, updateProduct);
 router.get("/:id", getProductById);
 
 export default router; // 🔥 THIS LINE FIX

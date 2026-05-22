@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.get("/assignable", verifyToken, isAdminOrProvider, listAssignableUsers);
 router.get("/", verifyToken, isAdmin, listUsers);
-router.post("/", verifyToken, isAdmin, createUserByAdmin);
+router.post("/", verifyToken, isAdminOrProvider, createUserByAdmin);
 router.patch("/:id", verifyToken, isAdmin, updateUserStatus);
 
 export default router;

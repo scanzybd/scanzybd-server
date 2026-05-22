@@ -7,7 +7,7 @@ function clientOrigin() {
     const raw =
         process.env.CLIENT_URL ||
         process.env.FRONTEND_URL ||
-        "http://localhost:5173";
+        "https://scanzybd.com";
     return String(raw).replace(/\/$/, "");
 }
 

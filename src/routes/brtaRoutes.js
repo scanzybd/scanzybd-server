@@ -1,10 +1,8 @@
 import express from "express";
-import { getLocationTree } from "../controllers/location.controller.js";
 import { getBrtaZones, getBrtaSeries } from "../controllers/brta.controller.js";
 
 const router = express.Router();
 
-router.get("/", getLocationTree);
 router.get("/brta-zones", getBrtaZones);
 router.get("/brta-series", getBrtaSeries);
 

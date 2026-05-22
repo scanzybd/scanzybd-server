@@ -166,6 +166,34 @@ export const getMe = async (req, res) => {
     }
 };
 
+export const updateMe = async (req, res) => {
+    try {
+        const name = String(req.body?.name ?? "").trim();
+
+        if (!name) {
+            return res.status(400).json({ message: "Name is required" });
+        }
+
+        if (name.length > 120) {
+            return res.status(400).json({ message: "Name is too long" });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { name },
+            { new: true, runValidators: true }
+        ).select("-password");
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json(user);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
 export const forgotPassword = async (req, res) => {
     try {
         const email = String(req.body?.email || "").toLowerCase().trim();
