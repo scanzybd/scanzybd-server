@@ -1,7 +1,10 @@
+import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Vehicle from "../models/Vehicle.js";
 import Counter from "../models/Counter.js";
+
+const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
 const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
@@ -289,7 +292,40 @@ export const getCompletedOrders = async (req, res) => {
         }
         const orders = await Order.find(q)
             .populate("userId")
-            .sort({ createdAt: -1 });
+            .populate({
+                path: "tagAssignments.vehicleId",
+                select: "plate vehicleName model qrIds",
+                populate: { path: "qrIds", select: "code status isAssigned" },
+            })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const productIds = new Set();
+        for (const order of orders) {
+            for (const tag of order.tagAssignments || []) {
+                const pid = String(tag.productId || "").trim();
+                if (pid && isObjectId(pid)) productIds.add(pid);
+            }
+        }
+
+        const typeByProductId = new Map();
+        if (productIds.size > 0) {
+            const products = await Product.find({
+                _id: { $in: [...productIds] },
+            })
+                .select("type title")
+                .lean();
+            for (const p of products) {
+                typeByProductId.set(String(p._id), p.type || p.title || "");
+            }
+        }
+
+        for (const order of orders) {
+            for (const tag of order.tagAssignments || []) {
+                const pid = String(tag.productId || "").trim();
+                tag.tagType = typeByProductId.get(pid) || "";
+            }
+        }
 
         res.json(orders);
     } catch (error) {
