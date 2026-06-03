@@ -362,7 +362,7 @@ export const getAdminPaidOrders = async (req, res) => {
 
         const orders = await Order.find({ paymentStatus: "paid" })
             .select(
-                "orderNo totalAmount status paymentStatus paymentMethod createdAt userId createdBy"
+                "orderNo orderKind totalAmount status paymentStatus paymentMethod createdAt userId createdBy"
             )
             .sort({ createdAt: -1 })
             .limit(1000)

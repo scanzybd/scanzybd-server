@@ -13,6 +13,23 @@ const orderSchema = new mongoose.Schema(
             trim: true,
         },
 
+        /** purchase (default) | renew_same_qr | renew_new_qr */
+        orderKind: {
+            type: String,
+            enum: ["purchase", "renew_same_qr", "renew_new_qr"],
+            default: "purchase",
+        },
+        linkedQrId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "QRCode",
+            default: null,
+        },
+        linkedVehicleId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Vehicle",
+            default: null,
+        },
+
         items: [
             {
                 productId: String,
@@ -20,6 +37,9 @@ const orderSchema = new mongoose.Schema(
                 image: String,
                 price: Number,
                 quantity: Number,
+                validityDays: { type: Number },
+                validFrom: { type: Date },
+                validUntil: { type: Date },
             },
         ],
 
@@ -88,7 +108,14 @@ const orderSchema = new mongoose.Schema(
         },
         paymentMethod: {
             type: String,
-            enum: ["bkash_online", "cash", "bkash_manual", "bkash"],
+            enum: [
+                "bkash_online",
+                "sslcommerz_online",
+                "cash",
+                "bkash_manual",
+                "bkash",
+                "sslcommerz",
+            ],
             default: "bkash_online",
         },
         completedBy: {

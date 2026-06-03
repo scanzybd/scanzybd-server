@@ -8,6 +8,10 @@ import {
     getQrIdsFromVehicle,
     syncVehicleQrFields,
 } from "../utils/vehicleQr.js";
+import {
+    getQrScanAccess,
+    linkSubscriptionToQr,
+} from "../utils/tagSubscription.service.js";
 
 
 /**
@@ -88,6 +92,8 @@ export const assignQRToVehicle = async (req, res) => {
     vehicle.qrIds = [...currentIds, qrIdStr];
     syncVehicleQrFields(vehicle);
     await vehicle.save();
+
+    await linkSubscriptionToQr(qr._id, vehicleId);
 
     res.json({
       success: true,
@@ -452,10 +458,33 @@ export const getQRByCode = async (req, res) => {
       vehicle = await Vehicle.findById(qr.vehicleId);
     }
 
+    const scanAccess = await getQrScanAccess(qr);
+    let vehicleOut = vehicle;
+
+    if (vehicle && !scanAccess.allowContact) {
+      const v = vehicle.toObject ? vehicle.toObject() : { ...vehicle };
+      vehicleOut = {
+        ...v,
+        ownerPhone: "",
+        emergencyPhone: "",
+        ownerContactVisible: false,
+        driverContactVisible: false,
+        emergencyContactVisible: false,
+        driver: v.driver
+          ? { ...v.driver, phone: "" }
+          : v.driver,
+      };
+    }
+
     return res.status(200).json({
       success: true,
       qr,
-      vehicle,
+      vehicle: vehicleOut,
+      scanAccess: {
+        allowContact: scanAccess.allowContact,
+        reason: scanAccess.reason,
+        subscriptionExpired: scanAccess.reason === "expired",
+      },
     });
 
   } catch (err) {

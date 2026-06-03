@@ -202,10 +202,19 @@ export const createOrder = async (req, res) => {
             });
         }
 
+        const items = cartItems.map((i) => ({
+            productId: String(i.productId || i._id || "").trim(),
+            title: i.title || i.name || "Product",
+            image: i.image || "",
+            price: Number(i.price) || 0,
+            quantity: Math.max(1, Number(i.quantity) || 1),
+            validityDays: i.validityDays != null ? Number(i.validityDays) : undefined,
+        }));
+
         const order = await Order.create({
             userId,
             orderNo: await nextOrderNo(),
-            items: cartItems,
+            items,
             tagAssignments,
             shippingAddress,
             totalAmount: amount,

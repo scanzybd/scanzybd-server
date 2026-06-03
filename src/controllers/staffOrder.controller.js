@@ -1,4 +1,3 @@
-import axios from "axios";
 import mongoose from "mongoose";
 import Order from "../models/Order.js";
 import Payment from "../models/Payment.js";
@@ -7,7 +6,13 @@ import Vehicle from "../models/Vehicle.js";
 import Product from "../models/Product.js";
 import SettlementRequest from "../models/SettlementRequest.js";
 import Counter from "../models/Counter.js";
-import { getBkashIdToken } from "../service/bkash.service.js";
+import { processOrderPaid } from "../utils/tagSubscription.service.js";
+import { createOnlinePayment } from "../service/paymentInit.service.js";
+import {
+    GATEWAYS,
+    getPublicPaymentGateways,
+    resolveGateway,
+} from "../service/paymentGateway.service.js";
 
 const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
@@ -24,50 +29,10 @@ const nextOrderNo = async () => {
 const staffRole = (req) =>
     String(req.user?.role || "").trim().toLowerCase();
 
-async function initBkashForOrder(order, customerUserId) {
-    const id_token = await getBkashIdToken();
-    const bkashRes = await axios.post(
-        process.env.BKASH_CREATE_PAYMENT_URL,
-        {
-            mode: "0011",
-            payerReference: String(customerUserId),
-            callbackURL: process.env.BKASH_BACKEND_CALLBACK_URL,
-            amount: String(order.totalAmount),
-            currency: "BDT",
-            intent: "sale",
-            merchantInvoiceNumber: `INV-${order.orderNo}-${Date.now()}`,
-        },
-        {
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: id_token,
-                "X-APP-Key": process.env.BKASH_APP_KEY,
-            },
-        }
-    );
-
-    const bkashData = bkashRes.data;
-    if (!bkashData?.paymentID) {
-        throw new Error("Payment init failed");
-    }
-
-    await Payment.create({
-        userId: customerUserId,
-        orderId: order._id,
-        amount: order.totalAmount,
-        currency: "BDT",
-        paymentMethod: "bkash",
-        paymentID: bkashData.paymentID,
-        status: "pending",
-        cartItems: (order.items || []).map((i) => ({
-            productId: i.productId,
-            name: i.title,
-            price: i.price,
-            quantity: i.quantity,
-        })),
-    });
-
-    return bkashData.bkashURL;
+async function initOnlinePaymentForOrder(order, customerUserId, gateway) {
+    const gw = await resolveGateway(gateway);
+    const result = await createOnlinePayment(order, customerUserId, gw);
+    return result.redirectURL;
 }
 
 /** Same vehicle/tag logic as user checkout — owner is customer, addedBy is staff. */
@@ -192,9 +157,31 @@ export const staffCreateOrder = async (req, res) => {
         }
 
         const method = String(paymentMethod || "cash").trim();
-        const allowed = ["cash", "bkash_manual", "bkash_online"];
+        const allowed = [
+            "cash",
+            "bkash_manual",
+            "bkash_online",
+            "sslcommerz_online",
+        ];
         if (!allowed.includes(method)) {
             return res.status(400).json({ message: "Invalid paymentMethod" });
+        }
+
+        if (method === "bkash_online" || method === "sslcommerz_online") {
+            const gateways = await getPublicPaymentGateways();
+            if (!gateways.hasOnlinePayment) {
+                return res.status(400).json({
+                    message: "No online payment gateway is enabled",
+                });
+            }
+            if (method === "bkash_online" && !gateways.bkash) {
+                return res.status(400).json({ message: "bKash online is disabled" });
+            }
+            if (method === "sslcommerz_online" && !gateways.sslcommerz) {
+                return res.status(400).json({
+                    message: "SSL Commerz is disabled",
+                });
+            }
         }
 
         if (method === "bkash_manual" && !String(transactionId || "").trim()) {
@@ -263,7 +250,8 @@ export const staffCreateOrder = async (req, res) => {
             paymentMethod: method,
         });
 
-        let bkashURL = null;
+        let redirectURL = null;
+        let paymentGateway = null;
 
         if (method === "cash") {
             await Payment.create({
@@ -302,9 +290,19 @@ export const staffCreateOrder = async (req, res) => {
                     quantity: i.quantity,
                 })),
             });
-        } else if (method === "bkash_online") {
+        } else if (method === "bkash_online" || method === "sslcommerz_online") {
             try {
-                bkashURL = await initBkashForOrder(order, userId);
+                const gateway =
+                    method === "sslcommerz_online"
+                        ? GATEWAYS.SSLCOMMERZ
+                        : GATEWAYS.BKASH;
+                await resolveGateway(gateway);
+                redirectURL = await initOnlinePaymentForOrder(
+                    order,
+                    userId,
+                    gateway
+                );
+                paymentGateway = gateway;
             } catch (payErr) {
                 await Order.findByIdAndDelete(order._id);
                 throw payErr;
@@ -315,7 +313,9 @@ export const staffCreateOrder = async (req, res) => {
             success: true,
             orderId: order._id,
             orderNo: order.orderNo,
-            bkashURL: bkashURL || undefined,
+            redirectURL: redirectURL || undefined,
+            bkashURL: redirectURL || undefined,
+            gateway: paymentGateway || undefined,
         });
     } catch (err) {
         console.error("staffCreateOrder:", err?.response?.data || err);
@@ -482,6 +482,7 @@ export const updateOrderPayment = async (req, res) => {
             payment.status = "success";
             payment.completedAt = payment.completedAt || new Date();
             order.paymentStatus = "paid";
+            await processOrderPaid(order, payment.completedAt);
         } else if (paymentStatus === "unpaid") {
             payment.status = "pending";
             order.paymentStatus = "unpaid";

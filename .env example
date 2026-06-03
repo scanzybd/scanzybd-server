@@ -30,6 +30,16 @@
 ; BKASH_FRONTEND_SUCCESS_URL=http://localhost:5173/user/payment/success
 ; BKASH_FRONTEND_FAIL_URL=http://localhost:5173/user/payment/failed
 
+; # ================= SSL Commerz =================
+; SSLCOMMERZ_STORE_ID=your_store_id
+; SSLCOMMERZ_STORE_PASS=your_store_password
+; SSLCOMMERZ_IS_LIVE=false
+; API_PUBLIC_URL=http://localhost:5000
+; SSLCOMMERZ_SUCCESS_URL=http://localhost:5000/api/payment/sslcommerz/success
+; SSLCOMMERZ_FAIL_URL=http://localhost:5000/api/payment/sslcommerz/fail
+; SSLCOMMERZ_CANCEL_URL=http://localhost:5000/api/payment/sslcommerz/cancel
+; SSLCOMMERZ_IPN_URL=http://localhost:5000/api/payment/sslcommerz/ipn
+
 ; # ImgBB (product image upload — same key you may use client-side only for reference)
 ; IMGBB_API_KEY=8f4de2e175488bd4ebea8fa976877b06
 

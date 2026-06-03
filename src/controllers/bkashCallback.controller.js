@@ -1,5 +1,5 @@
 import Payment from "../models/Payment.js";
-import Order from "../models/Order.js";
+import { completeOnlinePayment } from "../utils/paymentCompletion.js";
 import axios from "axios";
 import { getBkashIdToken } from "../service/bkash.service.js";
 
@@ -65,23 +65,15 @@ export const bkashCallback = async (req, res) => {
             return failRedirect();
         }
 
-        const payment = await Payment.findOneAndUpdate(
-            { paymentID },
-            {
-                status: "success",
-                transactionId: executeData.trxID,
-                amount: executeData.amount ?? undefined,
-                completedAt: new Date(),
-            },
-            { new: true }
-        );
-
-        if (payment?.orderId) {
-            await Order.findByIdAndUpdate(payment.orderId, {
-                status: "confirmed",
-                paymentStatus: "paid",
-            });
+        const payment = await Payment.findOne({ paymentID });
+        if (!payment) {
+            return failRedirect();
         }
+
+        await completeOnlinePayment(payment, {
+            transactionId: executeData.trxID,
+            amount: executeData.amount,
+        });
 
         // App expects Mongo payment _id + trxID so PaymentSuccess can call /confirm (idempotent)
         const pid = payment?._id?.toString();

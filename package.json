@@ -14,7 +14,8 @@
     "pm2:save": "pm2 save",
     "pm2:startup": "pm2 startup",
     "deploy:vercel": "vercel --prod",
-    "vercel:dev": "vercel dev"
+    "vercel:dev": "vercel dev",
+    "backfill:subscriptions": "node scripts/backfill-order-subscriptions.mjs"
   },
   "type": "module",
   "keywords": [],
