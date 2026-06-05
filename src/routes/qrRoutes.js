@@ -8,10 +8,13 @@ import {
     getQRById,
     getQRByCode,
 } from "../controllers/qr.controller.js";
+import qrFrameRoutes from "./qrFrameRoutes.js";
 
 import { verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
+
+router.use("/frames", qrFrameRoutes);
 
 // generate QR
 // ✅ FIXED ORDER

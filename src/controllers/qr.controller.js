@@ -1,4 +1,8 @@
 import QRModel from "../models/QRCode.js";
+import {
+    getActiveQrTypeSlugs,
+    resolveQrTypeForGenerate,
+} from "../service/qrFrameTemplate.service.js";
 import QRCodeLib from "qrcode";
 import Vehicle from "../models/Vehicle.js";
 import { nanoid } from "nanoid";
@@ -180,15 +184,7 @@ export const generateQRs = async (req, res) => {
   try {
     const { count, qrType: rawType } = req.body;
 
-    // ✅ allowed QR types
-    const allowedTypes = ["bike", "car"];
-
-    // ✅ sanitize qr type
-    const qrType =
-      typeof rawType === "string" &&
-        allowedTypes.includes(rawType.trim().toLowerCase())
-        ? rawType.trim().toLowerCase()
-        : "bike";
+    const qrType = await resolveQrTypeForGenerate(rawType);
 
     // ✅ base url
     const baseUrl = "http://scanzybd.com/qr-landing";
@@ -368,25 +364,29 @@ function buildCreatedAtFilter(query) {
   return {};
 }
 
-function mergeQrTypeFilter(query, dateFilter) {
+async function mergeQrTypeFilter(query, dateFilter) {
   const raw = query.qrType;
   const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  if (t !== "bike" && t !== "car") {
+  if (!t) {
     return dateFilter;
   }
 
-  if (t === "car") {
-    return { ...dateFilter, qrType: "car" };
+  const activeSlugs = await getActiveQrTypeSlugs();
+  if (activeSlugs.includes(t)) {
+    if (t === "bike") {
+      return {
+        ...dateFilter,
+        $or: [
+          { qrType: "bike" },
+          { qrType: { $exists: false } },
+          { qrType: null },
+        ],
+      };
+    }
+    return { ...dateFilter, qrType: t };
   }
 
-  return {
-    ...dateFilter,
-    $or: [
-      { qrType: "bike" },
-      { qrType: { $exists: false } },
-      { qrType: null },
-    ],
-  };
+  return dateFilter;
 }
 
 function summarizeQrAnalytics(docs) {
@@ -414,7 +414,7 @@ function summarizeQrAnalytics(docs) {
 export const getAllQR = async (req, res) => {
   try {
     const dateFilter = buildCreatedAtFilter(req.query);
-    const filter = mergeQrTypeFilter(req.query, dateFilter);
+    const filter = await mergeQrTypeFilter(req.query, dateFilter);
     const data = await QRModel.find(filter).sort({ createdAt: -1 }).lean();
 
     const analytics = summarizeQrAnalytics(data);

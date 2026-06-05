@@ -13,6 +13,7 @@ import {
     getAdminProviderDueList,
     getAdminProviderDueDetail,
     getAdminPaidOrders,
+    getAdminFinanceReport,
 } from "../controllers/finance.controller.js";
 import { verifyToken, isAdmin, isAdminOrProvider } from "../middleware/auth.js";
 
@@ -26,6 +27,7 @@ router.post("/provider/settlement-requests", verifyToken, createSettlementReques
 router.get("/provider/settlement-requests", verifyToken, listProviderSettlementRequests);
 
 router.get("/admin/paid-orders", verifyToken, isAdmin, getAdminPaidOrders);
+router.get("/admin/reports", verifyToken, isAdmin, getAdminFinanceReport);
 router.get("/admin/provider-dues", verifyToken, isAdmin, getAdminProviderDueList);
 router.get(
     "/admin/provider-dues/:providerId",

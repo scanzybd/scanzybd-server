@@ -3,6 +3,7 @@ import Order from "../models/Order.js";
 import User from "../models/User.js";
 import ProviderPaymentProfile from "../models/ProviderPaymentProfile.js";
 import SettlementRequest from "../models/SettlementRequest.js";
+import { buildAdminFinanceReport } from "../service/financeReport.service.js";
 
 const role = (req) => String(req.user?.role || "").trim().toLowerCase();
 
@@ -662,5 +663,26 @@ export const getAdminProviderDueDetail = async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ message: err.message });
+    }
+};
+
+/** GET /api/finance/admin/reports?year=2026&month=6 (month optional = yearly) */
+export const getAdminFinanceReport = async (req, res) => {
+    try {
+        if (role(req) !== "admin") {
+            return res.status(403).json({ message: "Admin only" });
+        }
+
+        const { year, month } = req.query;
+        if (!year) {
+            return res.status(400).json({ message: "year query param is required" });
+        }
+
+        const report = await buildAdminFinanceReport(year, month);
+        res.json({ success: true, report });
+    } catch (err) {
+        const msg = err.message || "Failed to build report";
+        const status = msg.includes("Invalid") ? 400 : 500;
+        res.status(status).json({ message: msg });
     }
 };
