@@ -19,6 +19,7 @@ import {
     sslcommerzSuccess,
 } from "../controllers/sslcommerzCallback.controller.js";
 import { isAdmin } from "../middleware/auth.js";
+import { paymentCreateRateLimit } from "../middleware/rateLimit.js";
 
 
 const router = express.Router();
@@ -27,7 +28,7 @@ router.get("/gateways", getGatewaysPublic);
 router.get("/admin/gateways", verifyToken, isAdmin, getGatewaysAdmin);
 router.patch("/admin/gateways", verifyToken, isAdmin, updateGatewaysAdmin);
 
-router.post("/create", verifyToken, createPayment);
+router.post("/create", verifyToken, paymentCreateRateLimit, createPayment);
 router.get("/bkash/callback", bkashCallback);
 router.post("/sslcommerz/success", sslcommerzSuccess);
 router.get("/sslcommerz/success", sslcommerzSuccess);

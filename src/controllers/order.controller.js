@@ -1,8 +1,14 @@
 import mongoose from "mongoose";
 import Order from "../models/Order.js";
+import Payment from "../models/Payment.js";
 import Product from "../models/Product.js";
 import Vehicle from "../models/Vehicle.js";
 import Counter from "../models/Counter.js";
+import {
+    canAdminDeleteOrder,
+    deleteOrderAndPayments,
+    linkVehiclesToSourceOrder,
+} from "../utils/unpaidOrderPolicy.js";
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
@@ -107,6 +113,7 @@ export const createOrder = async (req, res) => {
         }
 
         const tagAssignments = [];
+        const newVehicleIds = [];
 
         for (let i = 0; i < rawSlots.length; i++) {
             const slot = rawSlots[i];
@@ -123,19 +130,21 @@ export const createOrder = async (req, res) => {
             const productTitle = String(slot.productTitle || "").trim();
             const vehicleName = String(slot.productTitle || "Vehicle").trim();
 
-            if (!model || !plateRaw || !ownerPhone || !emergencyPhone || !productId) {
+            if (!plateRaw || !ownerPhone || !emergencyPhone || !productId) {
                 return res.status(400).json({
-                    message: `Tag ${i + 1}: fill manufacture year, plate, owner phone, and emergency phone.`,
+                    message: `Tag ${i + 1}: fill plate, owner phone, and emergency phone.`,
                 });
             }
 
-            const isCyclePlate = !chassisLast4 && !engineLast4;
-            if (!isCyclePlate) {
-                if (!/^\d{4}$/.test(chassisLast4) || !/^\d{4}$/.test(engineLast4)) {
-                    return res.status(400).json({
-                        message: `Tag ${i + 1}: chassis and engine last 4 digits must be exactly 4 numbers.`,
-                    });
-                }
+            if (chassisLast4 && !/^\d{4}$/.test(chassisLast4)) {
+                return res.status(400).json({
+                    message: `Tag ${i + 1}: chassis last 4 digits must be exactly 4 numbers.`,
+                });
+            }
+            if (engineLast4 && !/^\d{4}$/.test(engineLast4)) {
+                return res.status(400).json({
+                    message: `Tag ${i + 1}: engine last 4 digits must be exactly 4 numbers.`,
+                });
             }
 
             if (!/^\d{11}$/.test(ownerPhone)) {
@@ -152,9 +161,15 @@ export const createOrder = async (req, res) => {
 
             let driver;
             if (slot.driver?.name?.trim() && slot.driver?.phone?.trim()) {
+                const driverPhone = String(slot.driver.phone).trim();
+                if (!/^\d{11}$/.test(driverPhone)) {
+                    return res.status(400).json({
+                        message: `Tag ${i + 1}: driver phone must be exactly 11 digits.`,
+                    });
+                }
                 driver = {
                     name: slot.driver.name.trim(),
-                    phone: slot.driver.phone.trim(),
+                    phone: driverPhone,
                 };
             }
 
@@ -183,6 +198,7 @@ export const createOrder = async (req, res) => {
                     qrIds: [],
                     qrData: null,
                 });
+                newVehicleIds.push(vehicle._id);
             } else {
                 vehicle.model = model;
                 vehicle.ownerPhone = ownerPhone;
@@ -225,13 +241,14 @@ export const createOrder = async (req, res) => {
             paymentStatus: "unpaid",
         });
 
+        await linkVehiclesToSourceOrder(order._id, newVehicleIds);
+
         res.status(201).json({
             success: true,
             orderId: order._id,
             orderNo: order.orderNo,
         });
     } catch (error) {
-        console.log(error);
         res.status(500).json({
             message: error.message || "Order creation failed",
         });
@@ -397,6 +414,34 @@ export const getCancelledOrders = async (req, res) => {
 
 
 
+/** DELETE /api/order/my-orders/:orderId — owner may remove unpaid orders */
+export const deleteMyUnpaidOrder = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.id;
+        const { orderId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({ message: "Invalid order id" });
+        }
+
+        const order = await Order.findOne({ _id: orderId, userId });
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        const guard = await canAdminDeleteOrder(order);
+        if (!guard.ok) {
+            return res.status(400).json({ message: guard.message });
+        }
+
+        await deleteOrderAndPayments(order);
+
+        res.json({ success: true, message: "Order deleted" });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 export const getMyOrders = async (req, res) => {
     try {
         const userId = req.user?._id || req.user?.id;
@@ -404,7 +449,7 @@ export const getMyOrders = async (req, res) => {
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
         const skip = (page - 1) * limit;
 
-        const filter = { userId };
+        const filter = { userId, paymentStatus: "paid" };
 
         const [orders, total] = await Promise.all([
             Order.find(filter)

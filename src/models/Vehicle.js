@@ -9,7 +9,8 @@ const vehicleSchema = new mongoose.Schema(
         },
         model: {
             type: String,
-            required: true,
+            trim: true,
+            default: "",
         },
         plate: {
             type: String,
@@ -76,6 +77,13 @@ const vehicleSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             default: null,
+        },
+        /** Checkout order that first created this vehicle (for safe cascade delete). */
+        sourceOrderId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Order",
+            default: null,
+            index: true,
         },
     },
     { timestamps: true }

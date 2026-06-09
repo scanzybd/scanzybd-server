@@ -10,7 +10,7 @@ import {
 } from "../controllers/qr.controller.js";
 import qrFrameRoutes from "./qrFrameRoutes.js";
 
-import { verifyToken } from "../middleware/auth.js";
+import { isAdminOrProvider, verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.use("/frames", qrFrameRoutes);
 
 router.post("/generate", verifyToken, generateQRs);
 
-router.get("/allQR", getAllQR);
+router.get("/allQR", verifyToken, isAdminOrProvider, getAllQR);
 
 router.get("/id/:id", verifyToken, getQRById);
 

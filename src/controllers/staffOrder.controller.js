@@ -13,6 +13,13 @@ import {
     getPublicPaymentGateways,
     resolveGateway,
 } from "../service/paymentGateway.service.js";
+import {
+    canAdminDeleteOrder,
+    deleteOrderAndPayments,
+    linkVehiclesToSourceOrder,
+    purgeAbandonedUnpaidOrders,
+    unpaidOrderCutoffDate,
+} from "../utils/unpaidOrderPolicy.js";
 
 const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
@@ -38,6 +45,7 @@ async function initOnlinePaymentForOrder(order, customerUserId, gateway) {
 /** Same vehicle/tag logic as user checkout — owner is customer, addedBy is staff. */
 async function buildTagAssignmentsForCustomer(userId, staffId, rawSlots = []) {
     const tagAssignments = [];
+    const newVehicleIds = [];
 
     for (let i = 0; i < rawSlots.length; i++) {
         const slot = rawSlots[i];
@@ -106,6 +114,7 @@ async function buildTagAssignmentsForCustomer(userId, staffId, rawSlots = []) {
                 owner: userId,
                 addedBy: staffId,
             });
+            newVehicleIds.push(vehicle._id);
         } else {
             vehicle.model = model;
             vehicle.ownerPhone = ownerPhone;
@@ -127,7 +136,7 @@ async function buildTagAssignmentsForCustomer(userId, staffId, rawSlots = []) {
         });
     }
 
-    return tagAssignments;
+    return { tagAssignments, newVehicleIds };
 }
 
 export const staffCreateOrder = async (req, res) => {
@@ -223,11 +232,8 @@ export const staffCreateOrder = async (req, res) => {
             quantity: Math.max(1, Number(i.quantity) || 1),
         }));
 
-        const tagAssignments = await buildTagAssignmentsForCustomer(
-            userId,
-            staffId,
-            rawSlots
-        );
+        const { tagAssignments, newVehicleIds } =
+            await buildTagAssignmentsForCustomer(userId, staffId, rawSlots);
 
         let orderStatus = "pending";
         let orderPaymentStatus = "unpaid";
@@ -249,6 +255,8 @@ export const staffCreateOrder = async (req, res) => {
             createdBy: staffId,
             paymentMethod: method,
         });
+
+        await linkVehiclesToSourceOrder(order._id, newVehicleIds);
 
         let redirectURL = null;
         let paymentGateway = null;
@@ -397,10 +405,90 @@ export const deleteStaffOrder = async (req, res) => {
             return res.status(404).json({ message: "Order not found" });
         }
 
-        await Payment.deleteMany({ orderId: order._id });
-        await Order.findByIdAndDelete(order._id);
+        const guard = await canAdminDeleteOrder(order);
+        if (!guard.ok) {
+            return res.status(400).json({ message: guard.message });
+        }
+
+        await deleteOrderAndPayments(order._id);
 
         res.json({ success: true, message: "Order deleted" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+export const bulkDeleteExpiredUnpaidOrders = async (req, res) => {
+    try {
+        if (staffRole(req) !== "admin") {
+            return res.status(403).json({ message: "Admin only" });
+        }
+
+        const orderIds = Array.isArray(req.body?.orderIds)
+            ? req.body.orderIds
+            : [];
+        const uniqueIds = [
+            ...new Set(
+                orderIds
+                    .map((id) => String(id || "").trim())
+                    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+            ),
+        ];
+
+        if (!uniqueIds.length) {
+            return res.status(400).json({ message: "No valid order ids provided" });
+        }
+
+        const orders = await Order.find({ _id: { $in: uniqueIds } });
+        const deleted = [];
+        const failed = [];
+
+        for (const order of orders) {
+            const guard = await canAdminDeleteOrder(order);
+            if (!guard.ok) {
+                failed.push({
+                    orderId: order._id,
+                    orderNo: order.orderNo,
+                    message: guard.message,
+                });
+                continue;
+            }
+            await deleteOrderAndPayments(order._id);
+            deleted.push({ orderId: order._id, orderNo: order.orderNo });
+        }
+
+        const notFound = uniqueIds.filter(
+            (id) => !orders.some((o) => String(o._id) === id)
+        );
+
+        res.json({
+            success: true,
+            deletedCount: deleted.length,
+            failedCount: failed.length,
+            deleted,
+            failed,
+            notFound,
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+export const purgeAbandonedOrdersCron = async (req, res) => {
+    try {
+        const expected = String(process.env.CRON_SECRET || "").trim();
+        const provided = String(
+            req.headers["x-cron-secret"] ||
+                req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
+                ""
+        ).trim();
+
+        if (!expected || provided !== expected) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const result = await purgeAbandonedUnpaidOrders();
+        res.json({ success: true, ...result });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -655,7 +743,23 @@ export const getStaffOrders = async (req, res) => {
         if (req.query.status) {
             filter.status = String(req.query.status).trim();
         }
-        if (req.query.paymentStatus) {
+        if (req.query.unpaidOrders === "1") {
+            if (role !== "admin") {
+                return res.status(403).json({ message: "Admin only" });
+            }
+            filter.paymentStatus = { $in: ["unpaid", "failed"] };
+            filter.createdAt = { $lte: unpaidOrderCutoffDate() };
+            filter.$and = [
+                ...(filter.$and || []),
+                {
+                    $or: [
+                        { orderKind: "purchase" },
+                        { orderKind: { $exists: false } },
+                        { orderKind: null },
+                    ],
+                },
+            ];
+        } else if (req.query.paymentStatus) {
             filter.paymentStatus = String(req.query.paymentStatus).trim();
         }
         if (req.query.search) {

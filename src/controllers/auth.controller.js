@@ -3,6 +3,22 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendResetCodeEmail } from "../utils/mailer.js";
+import { verifyFirebaseIdToken } from "../utils/verifyFirebaseToken.js";
+
+const INVALID_CREDENTIALS_MSG = "Invalid email or password";
+
+function publicUser(user) {
+    if (!user) return null;
+    const doc = user.toObject ? user.toObject() : user;
+    return {
+        _id: doc._id,
+        name: doc.name,
+        email: doc.email,
+        role: doc.role,
+        photo: doc.photo ?? null,
+        phone: doc.phone ?? null,
+    };
+}
 
 /** Backend app JWT: 24h — returns token + expiresAt (ms) for client storage */
 function signAppJwt(user) {
@@ -19,12 +35,27 @@ function signAppJwt(user) {
 // ================= REGISTER =================
 export const register = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const name = String(req.body?.name || "").trim();
+        const email = String(req.body?.email || "").toLowerCase().trim();
+        const password = String(req.body?.password || "");
 
-        // check duplicate
+        if (!name || !email || !password) {
+            return res.status(400).json({
+                message: "Name, email, and password are required",
+            });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({
+                message: "Password must be at least 6 characters",
+            });
+        }
+
         const exist = await User.findOne({ email });
         if (exist) {
-            return res.status(400).json({ message: "User already exists" });
+            return res.status(400).json({
+                message:
+                    "Unable to create account with this email. Try logging in or use forgot password.",
+            });
         }
 
         const hashed = await bcrypt.hash(password, 10);
@@ -32,11 +63,14 @@ export const register = async (req, res) => {
         const user = await User.create({
             name,
             email,
-            // phone,
             password: hashed,
         });
 
-        res.json(user);
+        res.status(201).json({
+            success: true,
+            message: "Registration successful. You can log in now.",
+            user: publicUser(user),
+        });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -55,53 +89,67 @@ export const login = async (req, res) => {
 
         const usersWithEmail = await User.find({ email }).sort({ createdAt: -1 });
         if (!usersWithEmail.length) {
-            return res.status(404).json({ msg: "User not found" });
+            return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
         }
 
-        // Hard block by email if any matching account is disabled.
         if (usersWithEmail.some((u) => u.isActive === false)) {
             return res.status(403).json({ msg: "Account is disabled" });
         }
 
-        // Prefer DB account that actually has a password (in case a social-only record also exists).
         let user = usersWithEmail.find(
             (u) => typeof u.password === "string" && u.password !== ""
         );
 
-        // Fallback: any account with this email (for better error messaging).
         if (!user) {
             user = usersWithEmail[0];
         }
         if (!user.password || typeof user.password !== "string") {
-            return res.status(400).json({
-                msg: "Password is not set for this account. Use Forgot Password to set a new password, then login with email and password.",
-            });
+            return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
         }
 
         const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ msg: "Wrong password" });
+        if (!match) {
+            return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
+        }
 
         const { token, expiresAt } = signAppJwt(user);
 
-        res.json({ token, expiresAt, user });
+        res.json({ token, expiresAt, user: publicUser(user) });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-// ================= SOCIAL LOGIN (DB-FIRST) =================
+// ================= SOCIAL LOGIN (Firebase ID token verified server-side) =================
 export const socialLogin = async (req, res) => {
     try {
-        const { email, name, photo, provider, providerId } = req.body;
+        const { idToken, provider } = req.body;
 
-        if (!email) {
+        if (!idToken) {
             return res.status(400).json({
                 success: false,
-                message: "Email is required for social login",
+                message: "idToken is required for social login",
             });
         }
 
-        const emailNorm = String(email).toLowerCase().trim();
+        let verified;
+        try {
+            verified = await verifyFirebaseIdToken(idToken);
+        } catch (verifyErr) {
+            return res.status(401).json({
+                success: false,
+                message: verifyErr.message || "Invalid social login token",
+            });
+        }
+
+        if (!verified.email) {
+            return res.status(400).json({
+                success: false,
+                message: "Verified account has no email",
+            });
+        }
+
+        const emailNorm = verified.email;
         const usersWithEmail = await User.find({ email: emailNorm }).sort({ createdAt: -1 });
         if (usersWithEmail.some((u) => u.isActive === false)) {
             return res.status(403).json({
@@ -111,20 +159,21 @@ export const socialLogin = async (req, res) => {
         }
         let user = usersWithEmail[0] || null;
 
-        // Create social user in DB on first login.
         if (!user) {
             user = await User.create({
-                name: name?.trim() || "Social User",
+                name: verified.name?.trim() || "Social User",
                 email: emailNorm,
-                photo: photo || null,
-                uid: providerId || null,
+                photo: verified.photo || null,
+                uid: verified.uid || null,
                 role: "user",
             });
         } else {
             const updates = {};
-            if (photo && photo !== user.photo) updates.photo = photo;
-            if (providerId && providerId !== user.uid) updates.uid = providerId;
-            if (name?.trim() && name.trim() !== user.name) updates.name = name.trim();
+            if (verified.photo && verified.photo !== user.photo) updates.photo = verified.photo;
+            if (verified.uid && verified.uid !== user.uid) updates.uid = verified.uid;
+            if (verified.name?.trim() && verified.name.trim() !== user.name) {
+                updates.name = verified.name.trim();
+            }
             if (Object.keys(updates).length > 0) {
                 user = await User.findByIdAndUpdate(user._id, updates, { new: true });
             }
@@ -134,14 +183,12 @@ export const socialLogin = async (req, res) => {
 
         return res.json({
             success: true,
-            provider: provider || "social",
+            provider: provider || "google",
             token: appToken,
             expiresAt,
-            user,
+            user: publicUser(user),
         });
-
     } catch (err) {
-        console.log("Social login error:", err);
         return res.status(401).json({
             success: false,
             message: "Social login failed",
@@ -224,8 +271,8 @@ export const forgotPassword = async (req, res) => {
                 code,
                 expiresMinutes: 10,
             });
-        } catch (mailErr) {
-            console.log("Reset mail send failed:", mailErr.message);
+        } catch {
+            /* email delivery failed — response still generic */
         }
 
         return res.json({

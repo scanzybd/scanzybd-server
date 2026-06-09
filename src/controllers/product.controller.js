@@ -14,9 +14,30 @@ const UPDATE_FIELDS = new Set([
     "rating",
     "reviews",
     "inStock",
+    "isActive",
     "features",
     "specifications",
 ]);
+
+/** Public catalog — only products visible to customers */
+const PUBLIC_PRODUCT_FILTER = { isActive: { $ne: false } };
+
+const PRODUCT_SORT = { displayOrder: 1, createdAt: -1 };
+
+/** Assign displayOrder to legacy products that never had one */
+async function ensureProductDisplayOrders() {
+    const missing = await Product.countDocuments({
+        $or: [{ displayOrder: null }, { displayOrder: { $exists: false } }],
+    });
+    if (missing === 0) return;
+
+    const all = await Product.find().sort({ createdAt: -1 }).select("_id");
+    await Promise.all(
+        all.map((p, index) =>
+            Product.updateOne({ _id: p._id }, { $set: { displayOrder: index } })
+        )
+    );
+}
 
 // ➕ Add Product (createdBy forced from logged-in staff)
 export const addProduct = async (req, res) => {
@@ -26,10 +47,17 @@ export const addProduct = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        const { createdBy: _c, _id: _i, createdAt: _a, ...rest } = req.body;
+        const { createdBy: _c, _id: _i, createdAt: _a, displayOrder: _d, ...rest } = req.body;
+
+        const top = await Product.findOne({ displayOrder: { $ne: null } })
+            .sort({ displayOrder: -1 })
+            .select("displayOrder")
+            .lean();
+        const nextOrder = (top?.displayOrder ?? -1) + 1;
 
         const result = await Product.create({
             ...rest,
+            displayOrder: nextOrder,
             createdBy: {
                 name: dbUser.name,
                 email: dbUser.email,
@@ -45,8 +73,6 @@ export const addProduct = async (req, res) => {
         });
 
     } catch (error) {
-        console.log(error);
-
         res.status(500).send({
             success: false,
             message: "Failed to add product",
@@ -76,7 +102,7 @@ export const getProductById = async (req, res) => {
 
         const product = await Product.findById(id);
 
-        if (!product) {
+        if (!product || product.isActive === false) {
             return res.status(404).json({
                 success: false,
                 message: "Product not found",
@@ -89,8 +115,6 @@ export const getProductById = async (req, res) => {
         });
 
     } catch (error) {
-        console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Failed to fetch product",
@@ -101,7 +125,8 @@ export const getProductById = async (req, res) => {
 /** Public catalog — everyone (guest, user, provider, admin) sees full list */
 export const getAllProducts = async (req, res) => {
     try {
-        const result = await Product.find().sort({ createdAt: -1 });
+        await ensureProductDisplayOrders();
+        const result = await Product.find(PUBLIC_PRODUCT_FILTER).sort(PRODUCT_SORT);
         res.send(result);
     } catch (error) {
         res.status(500).send({ message: "Failed to get products" });
@@ -111,7 +136,8 @@ export const getAllProducts = async (req, res) => {
 /** Dashboard product table — admin & provider see full catalog (only admin may update) */
 export const getDashboardProducts = async (req, res) => {
     try {
-        const result = await Product.find().sort({ createdAt: -1 });
+        await ensureProductDisplayOrders();
+        const result = await Product.find().sort(PRODUCT_SORT);
         res.send(result);
     } catch (error) {
         res.status(500).send({ message: "Failed to get products" });
@@ -177,6 +203,9 @@ export const updateProduct = async (req, res) => {
         if (patch.features !== undefined && !Array.isArray(patch.features)) {
             return res.status(400).json({ success: false, message: "features must be an array" });
         }
+        if (patch.isActive !== undefined && typeof patch.isActive !== "boolean") {
+            return res.status(400).json({ success: false, message: "isActive must be boolean" });
+        }
 
         const updated = await Product.findByIdAndUpdate(
             id,
@@ -190,10 +219,68 @@ export const updateProduct = async (req, res) => {
             data: updated,
         });
     } catch (error) {
-        console.log(error);
         res.status(500).json({
             success: false,
             message: "Failed to update product",
+            error: error.message,
+        });
+    }
+};
+
+/** PATCH /api/products/reorder — admin sets storefront list order */
+export const reorderProducts = async (req, res) => {
+    try {
+        const { orderedIds } = req.body || {};
+
+        if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "orderedIds must be a non-empty array",
+            });
+        }
+
+        for (const id of orderedIds) {
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid product id in orderedIds",
+                });
+            }
+        }
+
+        const unique = new Set(orderedIds.map(String));
+        if (unique.size !== orderedIds.length) {
+            return res.status(400).json({
+                success: false,
+                message: "orderedIds must not contain duplicates",
+            });
+        }
+
+        const count = await Product.countDocuments({ _id: { $in: orderedIds } });
+        if (count !== orderedIds.length) {
+            return res.status(400).json({
+                success: false,
+                message: "One or more products were not found",
+            });
+        }
+
+        await Product.bulkWrite(
+            orderedIds.map((id, index) => ({
+                updateOne: {
+                    filter: { _id: id },
+                    update: { $set: { displayOrder: index } },
+                },
+            }))
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Product order updated",
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to reorder products",
             error: error.message,
         });
     }

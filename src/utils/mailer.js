@@ -95,8 +95,6 @@ export async function sendResetCodeEmail({
         // Verify SMTP connection
         await transport.verify();
 
-        console.log("✅ SMTP Connected");
-
         const subject = "Your password reset code";
 
         const text = `
@@ -128,7 +126,7 @@ This code expires in ${expiresMinutes} minutes.
       </div>
     `;
 
-        const info = await transport.sendMail({
+        await transport.sendMail({
             from: cfg.smtpFrom,
             to: toEmail,
             subject,
@@ -136,20 +134,10 @@ This code expires in ${expiresMinutes} minutes.
             html,
         });
 
-        console.log(
-            "✅ Reset Email Sent:",
-            info.messageId
-        );
-
         return true;
     } catch (err) {
         console.error("❌ Email Send Error:", err);
 
         return false;
     }
-    console.log("Accepted:", info.accepted);
-
-    console.log("Rejected:", info.rejected);
-
-    console.log("Response:", info.response);
 }

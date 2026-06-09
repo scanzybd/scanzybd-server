@@ -5,6 +5,7 @@ import {
     getCancelledOrders,
     getCompletedOrders,
     getDeliveredOrders,
+    deleteMyUnpaidOrder,
     getMyOrders,
     getPendingOrders,
     getReturnedOrders,
@@ -15,19 +16,30 @@ import {
     completeOrder,
     updateStaffOrderStatus,
     deleteStaffOrder,
+    bulkDeleteExpiredUnpaidOrders,
+    purgeAbandonedOrdersCron,
     updateOrderPayment,
     getStaffOrders,
     getOrderById,
     getDashboardAnalytics,
 } from "../controllers/staffOrder.controller.js";
 import { isAdmin, isAdminOrProvider, isProvider, verifyToken } from "../middleware/auth.js";
+import { orderCreateRateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 
-router.post("/create", verifyToken, createOrder);
-router.post("/staff-create", verifyToken, isAdminOrProvider, staffCreateOrder);
+router.get("/cron/purge-abandoned", purgeAbandonedOrdersCron);
+router.post("/create", verifyToken, orderCreateRateLimit, createOrder);
+router.post(
+    "/staff-create",
+    verifyToken,
+    isAdminOrProvider,
+    orderCreateRateLimit,
+    staffCreateOrder
+);
 
 router.get("/my-orders", verifyToken, getMyOrders);
+router.delete("/my-orders/:orderId", verifyToken, deleteMyUnpaidOrder);
 router.get("/dashboard-analytics", verifyToken, isAdminOrProvider, getDashboardAnalytics);
 router.get("/staff-orders", verifyToken, isAdminOrProvider, getStaffOrders);
 
@@ -42,6 +54,12 @@ router.get("/delivered", verifyToken, isAdmin, getDeliveredOrders);
 router.patch("/:orderId/complete", verifyToken, isAdmin, completeOrder);
 router.patch("/:orderId/payment", verifyToken, isAdmin, updateOrderPayment);
 router.patch("/:orderId/status", verifyToken, isAdmin, updateStaffOrderStatus);
+router.delete(
+    "/bulk-unpaid",
+    verifyToken,
+    isAdmin,
+    bulkDeleteExpiredUnpaidOrders
+);
 router.delete("/:orderId", verifyToken, isAdmin, deleteStaffOrder);
 
 router.get("/:orderId", verifyToken, getOrderById);

@@ -9,6 +9,7 @@ import {
     getDashboardProducts,
     getProductById,
     myProducts,
+    reorderProducts,
     updateProduct,
 } from "../controllers/product.controller.js";
 import { isAdmin, isProvider, verifyToken } from "../middleware/auth.js";
@@ -17,6 +18,7 @@ router.post("/", verifyToken, isAdmin, addProduct);
 router.get("/", getAllProducts);
 router.get("/mine", verifyToken, isProvider, getDashboardProducts);
 router.get("/my/:email", myProducts);
+router.patch("/reorder", verifyToken, isAdmin, reorderProducts);
 router.put("/:id", verifyToken, isAdmin, updateProduct);
 router.get("/:id", getProductById);
 

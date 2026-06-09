@@ -1,5 +1,6 @@
 import express from "express";
-import cors from "cors";
+import { createCorsMiddleware } from "./middleware/cors.js";
+import { globalApiRateLimit } from "./middleware/rateLimit.js";
 
 // routes
 import authRoutes from "./routes/authRoutes.js";
@@ -24,8 +25,11 @@ import { installApiResponseCache } from "./middleware/apiResponseCache.js";
 
 const app = express();
 
-app.use(cors());
+app.set("trust proxy", 1);
+
+app.use(createCorsMiddleware());
 app.use(express.json({ limit: "12mb" }));
+app.use("/api", globalApiRateLimit);
 
 installApiResponseCache(app);
 

@@ -1,11 +1,45 @@
+import mongoose from "mongoose";
 import Vehicle from "../models/Vehicle.js";
 import User from "../models/User.js";
+import Order from "../models/Order.js";
 import QRModel from "../models/QRCode.js";
 import {
     getQrIdsFromVehicle,
     normalizeVehicleDoc,
     syncVehicleQrFields,
 } from "../utils/vehicleQr.js";
+
+/** User-facing list: paid-order, manual, or QR-assigned vehicles only. */
+async function filterVehiclesVisibleToUser(vehicles) {
+    const sourceOrderIds = [
+        ...new Set(
+            vehicles
+                .map((v) => v.sourceOrderId)
+                .filter(Boolean)
+                .map((id) => String(id))
+                .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        ),
+    ];
+
+    const paidSourceOrderIds = new Set();
+    if (sourceOrderIds.length) {
+        const paidOrders = await Order.find({
+            _id: { $in: sourceOrderIds },
+            paymentStatus: "paid",
+        })
+            .select("_id")
+            .lean();
+        for (const order of paidOrders) {
+            paidSourceOrderIds.add(String(order._id));
+        }
+    }
+
+    return vehicles.filter((vehicle) => {
+        if (getQrIdsFromVehicle(vehicle).length > 0) return true;
+        if (!vehicle.sourceOrderId) return true;
+        return paidSourceOrderIds.has(String(vehicle.sourceOrderId));
+    });
+}
 
 const canManageVehicle = (vehicle, reqUser) => {
     if (!vehicle || !reqUser?._id) return false;
@@ -27,8 +61,6 @@ const canManageVehicle = (vehicle, reqUser) => {
 // ➕ ADD VEHICLE — end user: owner = self; admin/provider: must assign a customer (role user) + addedBy = staff
 export const addVehicle = async (req, res) => {
     try {
-        console.log("BODY:", req.body);
-
         let {
             vehicleName,
             model,
@@ -149,12 +181,15 @@ export const getVehicles = async (req, res) => {
 // 👤 MY VEHICLES — token user only (no email spoofing)
 export const getMyVehicles = async (req, res) => {
     try {
-        const vehicles = await Vehicle.find({ owner: req.user._id })
-            .sort({ createdAt: -1 });
+        const vehicles = await Vehicle.find({ owner: req.user._id }).sort({
+            createdAt: -1,
+        });
+
+        const visible = await filterVehiclesVisibleToUser(vehicles);
 
         res.status(200).json({
             success: true,
-            data: vehicles.map((v) => normalizeVehicleDoc(v)),
+            data: visible.map((v) => normalizeVehicleDoc(v)),
         });
 
     } catch (err) {
@@ -171,9 +206,6 @@ export const getMyVehicles = async (req, res) => {
 export const updateVehicle = async (req, res) => {
     try {
         const { id } = req.params;
-
-        console.log("PARAM ID:", id);
-        console.log("USER ID:", req.user._id);
 
         const {
             vehicleName,

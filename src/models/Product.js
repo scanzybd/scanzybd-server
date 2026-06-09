@@ -58,6 +58,18 @@ const productSchema = new mongoose.Schema(
             default: true,
         },
 
+        /** When false, hidden from storefront — customers cannot view or add to cart */
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
+
+        /** Lower number = shown first in product list (dashboard + storefront) */
+        displayOrder: {
+            type: Number,
+            default: null,
+        },
+
         features: {
             type: [String], // array of strings
             default: [],

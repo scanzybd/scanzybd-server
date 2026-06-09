@@ -57,3 +57,13 @@
 # API_CACHE_ENABLED=true
 # API_CACHE_TTL_MS=300000
 # API_CACHE_MAX=500
+
+; # ================= Firebase (social login token verify) =================
+; FIREBASE_WEB_API_KEY=your_firebase_web_api_key
+
+; # ================= CORS (optional extra origins, comma-separated) =================
+; CORS_ALLOWED_ORIGINS=https://preview.scanzybd.com
+
+; # ================= Cron (abandoned order purge) =================
+; # Vercel Cron sends Authorization: Bearer <CRON_SECRET> when this env is set.
+; CRON_SECRET=your_random_cron_secret

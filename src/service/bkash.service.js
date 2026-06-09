@@ -26,7 +26,6 @@ async function fetchGrantToken() {
         }
     );
 
-    console.log("BKASH TOKEN OK (new grant)");
     return res.data.id_token;
 }
 

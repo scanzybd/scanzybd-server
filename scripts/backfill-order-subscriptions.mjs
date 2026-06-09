@@ -34,8 +34,8 @@ const uri =
     process.env.MONGODB_URI?.trim() ||
     `mongodb+srv://${dbUser}:${dbPass}@cluster0.zzqq3aq.mongodb.net/scanzybd_db?appName=Cluster0`;
 
-console.log(dryRun ? "DRY RUN (no writes)" : "APPLY mode (will write to DB)");
-console.log(all ? "Scope: all legacy paid orders" : `Scope: orderNo=${orderNo}`);
+process.stdout.write(`${dryRun ? "DRY RUN (no writes)" : "APPLY mode (will write to DB)"}\n`);
+process.stdout.write(`${all ? "Scope: all legacy paid orders" : `Scope: orderNo=${orderNo}`}\n`);
 
 await mongoose.connect(uri);
 
@@ -46,12 +46,12 @@ try {
         limit: all ? 2000 : 50,
     });
 
-    console.log(JSON.stringify(report, null, 2));
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 
     if (dryRun) {
-        console.log("\nNo changes written. Re-run with --apply to persist.");
+        process.stdout.write("\nNo changes written. Re-run with --apply to persist.\n");
     } else {
-        console.log("\nBackfill complete.");
+        process.stdout.write("\nBackfill complete.\n");
     }
 } finally {
     await mongoose.disconnect();

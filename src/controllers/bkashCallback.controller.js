@@ -51,7 +51,6 @@ export const bkashCallback = async (req, res) => {
 
         const executeData = executeRes.data;
 
-        console.log("bKash execute response:", executeData);
 
         const completed =
             executeData.transactionStatus === "Completed" ||

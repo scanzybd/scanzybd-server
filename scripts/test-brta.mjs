@@ -15,17 +15,17 @@ const uri =
 await mongoose.connect(uri);
 const db = mongoose.connection.db;
 const cols = (await db.listCollections().toArray()).map((c) => c.name);
-console.log("collections with brta:", cols.filter((n) => /brta/i.test(n)));
+process.stdout.write(`collections with brta: ${JSON.stringify(cols.filter((n) => /brta/i.test(n)))}\n`);
 
 for (const name of ["BRTA_zone", "BRTA_series", "brta_zone", "brta_series"]) {
   try {
     const count = await db.collection(name).countDocuments();
     if (count > 0) {
       const one = await db.collection(name).findOne();
-      console.log(name, count, one);
+      process.stdout.write(`${name} ${count} ${JSON.stringify(one)}\n`);
     }
   } catch (e) {
-    console.log(name, "err", e.message);
+    process.stdout.write(`${name} err ${e.message}\n`);
   }
 }
 

@@ -45,12 +45,6 @@ export const connectDB = async () => {
                 await mongoose.connect(uri, {
                     serverSelectionTimeoutMS: 15000,
                 });
-                console.log("✅ MongoDB Connected");
-                if (uri.startsWith("mongodb://") && !explicitUri) {
-                    console.log(
-                        "   (direct connection — set MONGODB_URI in .env to override)"
-                    );
-                }
                 return;
             } catch (err) {
                 lastErr = err;
@@ -70,11 +64,7 @@ export const connectDB = async () => {
             }
         }
         throw lastErr;
-    } catch (err) {
-        console.log("❌ DB Error:", err.message);
-        console.log(
-            "   Tip: Use MONGODB_URI with mongodb:// (not srv) if DNS blocks Atlas SRV lookups."
-        );
+    } catch {
         process.exit(1);
     }
 };

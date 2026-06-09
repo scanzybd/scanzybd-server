@@ -44,6 +44,7 @@ export const createPayment = async (req, res) => {
 
 export const confirmPayment = async (req, res) => {
     try {
+        const userId = req.user?._id || req.user?.id;
         const { paymentId, transactionId } = req.body;
 
         const payment = await Payment.findById(paymentId);
@@ -52,6 +53,13 @@ export const confirmPayment = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Payment not found",
+            });
+        }
+
+        if (String(payment.userId) !== String(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Not your payment",
             });
         }
 
@@ -70,8 +78,6 @@ export const confirmPayment = async (req, res) => {
             message: "Payment successful & order updated",
         });
     } catch (error) {
-        console.log(error);
-
         return res.status(500).json({
             success: false,
             message: error.message,
