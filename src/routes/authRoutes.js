@@ -20,6 +20,7 @@ import {
 
 const router = express.Router();
 
+//change
 router.post("/register", registerRateLimit, register);
 router.post("/login", loginIpRateLimit, loginEmailRateLimit, login);
 router.post("/social", socialLoginRateLimit, socialLogin);
