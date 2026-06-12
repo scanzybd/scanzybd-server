@@ -21,6 +21,7 @@ import brtaRoutes from "./routes/brtaRoutes.js";
 import tagTypeRoutes from "./routes/tagTypeRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import siteSettingsRoutes from "./routes/siteSettingsRoutes.js";
+import cartRoutes from "./routes/cartRoutes.js";
 import { installApiResponseCache } from "./middleware/apiResponseCache.js";
 
 const app = express();
@@ -56,5 +57,6 @@ app.use("/api", brtaRoutes);
 app.use("/api/tag-types", tagTypeRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/settings", siteSettingsRoutes);
+app.use("/api/cart", cartRoutes);
 
 export default app;

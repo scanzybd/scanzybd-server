@@ -36,6 +36,7 @@ const GLOBAL_SKIP_PREFIXES = [
     "/api/payment/bkash/callback",
     "/api/payment/sslcommerz/",
     "/api/order/cron/purge-abandoned",
+    "/api/cart/cron/purge-stale",
 ];
 
 export function shouldSkipGlobalRateLimit(req) {
