@@ -1,5 +1,5 @@
 {
-  "name": "qr-tag-server",
+  "name": "scanzybd-server",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -7,8 +7,8 @@
     "start": "node src/index.js",
     "pm2:start": "pm2 start ../ecosystem.config.cjs",
     "pm2:start:prod": "pm2 start ../ecosystem.config.cjs --env production",
-    "pm2:stop": "pm2 stop qr-tag-server",
-    "pm2:delete": "pm2 delete qr-tag-server",
+    "pm2:stop": "pm2 stop scanzybd-server",
+    "pm2:delete": "pm2 delete scanzybd-server",
     "pm2:logs": "pm2 logs",
     "pm2:status": "pm2 status",
     "pm2:save": "pm2 save",
