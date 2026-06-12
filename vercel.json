@@ -15,7 +15,8 @@
   "crons": [
     {
       "path": "/api/order/cron/purge-abandoned",
-      "schedule": "0 */6 * * *"
+       "schedule": "0 0 * * *"
+      
     }
   ]
 }
