@@ -1,24 +1,19 @@
 import mongoose from "mongoose";
 import Cart from "../models/Cart.js";
 import { isStaleCart, purgeStaleCarts } from "../utils/cartPolicy.js";
+import { resolveOrderLineItems } from "../utils/orderCartValidation.js";
 
-function normalizeCartItem(raw) {
-    if (!raw || typeof raw !== "object") return null;
-    const id = raw.productId ?? raw._id ?? raw.id;
-    const idStr = id != null ? String(id).trim() : "";
-    if (!idStr || !mongoose.Types.ObjectId.isValid(idStr)) return null;
-
-    return {
-        productId: new mongoose.Types.ObjectId(idStr),
-        title: String(raw.title || "").trim(),
-        price: Number(raw.price) || 0,
-        quantity: Math.max(1, Number(raw.quantity) || 1),
-        validityDays:
-            raw.validityDays != null ? Number(raw.validityDays) : undefined,
-        image: raw.image || raw.imageUrl || null,
-        type: raw.type != null ? String(raw.type) : null,
-        isActive: raw.isActive !== false,
-    };
+function toCartDbItems(resolvedItems = []) {
+    return resolvedItems.map((item) => ({
+        productId: new mongoose.Types.ObjectId(item.productId),
+        title: item.title,
+        price: item.price,
+        quantity: item.quantity,
+        validityDays: item.validityDays,
+        image: item.image || null,
+        type: item.type != null ? String(item.type) : null,
+        isActive: true,
+    }));
 }
 
 function itemsForClient(items = []) {
@@ -68,11 +63,20 @@ export const putCart = async (req, res) => {
         }
 
         const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
-        const items = rawItems.map(normalizeCartItem).filter(Boolean);
+
+        let items;
+        try {
+            ({ items } = await resolveOrderLineItems(rawItems));
+        } catch (validationErr) {
+            const status = validationErr.statusCode || 400;
+            return res.status(status).json({ message: validationErr.message });
+        }
+
+        const cartItems = toCartDbItems(items);
 
         const cart = await Cart.findOneAndUpdate(
             { userId },
-            { items, lastActivityAt: new Date() },
+            { items: cartItems, lastActivityAt: new Date() },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 

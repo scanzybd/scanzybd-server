@@ -124,5 +124,15 @@ export const orderCreateRateLimit = rateLimit({
     handler: jsonHandler("Too many order requests. Try again later."),
 });
 
+/** Contact form spam protection (per IP). */
+export const contactRateLimit = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `contact-ip:${clientIp(req)}`,
+    handler: jsonHandler("Too many messages sent. Try again later."),
+});
+
 /** Backward-compatible alias */
 export const loginRateLimit = loginIpRateLimit;

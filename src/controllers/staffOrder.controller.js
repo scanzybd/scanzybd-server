@@ -20,6 +20,7 @@ import {
     purgeAbandonedUnpaidOrders,
     unpaidOrderCutoffDate,
 } from "../utils/unpaidOrderPolicy.js";
+import { resolveOrderLineItems } from "../utils/orderCartValidation.js";
 
 const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
@@ -207,12 +208,17 @@ export const staffCreateOrder = async (req, res) => {
         }
 
         const staffId = req.user._id;
-        const orderAmount = Number(amount ?? totalAmount);
-        if (Number.isNaN(orderAmount) || orderAmount < 0) {
-            return res.status(400).json({ message: "Valid total amount is required" });
+
+        let items;
+        let totalAmount;
+        try {
+            ({ items, totalAmount } = await resolveOrderLineItems(cartItemsList));
+        } catch (validationErr) {
+            const status = validationErr.statusCode || 400;
+            return res.status(status).json({ message: validationErr.message });
         }
 
-        const totalQty = cartItemsList.reduce(
+        const totalQty = items.reduce(
             (sum, i) => sum + Math.max(1, Number(i.quantity) || 1),
             0
         );
@@ -223,14 +229,6 @@ export const staffCreateOrder = async (req, res) => {
                     "Provide vehicle details for each tag — count must match total items.",
             });
         }
-
-        const items = cartItemsList.map((i) => ({
-            productId: String(i.productId || i._id || ""),
-            title: i.title || i.name || "Product",
-            image: i.image || "",
-            price: Number(i.price) || 0,
-            quantity: Math.max(1, Number(i.quantity) || 1),
-        }));
 
         const { tagAssignments, newVehicleIds } =
             await buildTagAssignmentsForCustomer(userId, staffId, rawSlots);
@@ -249,7 +247,7 @@ export const staffCreateOrder = async (req, res) => {
             items,
             tagAssignments,
             shippingAddress: shippingAddress || {},
-            totalAmount: orderAmount,
+            totalAmount,
             status: orderStatus,
             paymentStatus: orderPaymentStatus,
             createdBy: staffId,
@@ -261,13 +259,17 @@ export const staffCreateOrder = async (req, res) => {
         let redirectURL = null;
         let paymentGateway = null;
 
-        if (method === "cash") {
+        if (method === "cash" || method === "bkash_manual") {
             await Payment.create({
                 userId,
                 orderId: order._id,
-                amount: orderAmount,
+                amount: totalAmount,
                 currency: "BDT",
-                paymentMethod: "cash",
+                paymentMethod: method,
+                transactionId:
+                    method === "bkash_manual"
+                        ? String(transactionId).trim()
+                        : undefined,
                 status: "success",
                 processedBy: staffId,
                 completedAt: new Date(),
@@ -279,25 +281,7 @@ export const staffCreateOrder = async (req, res) => {
                     quantity: i.quantity,
                 })),
             });
-        } else if (method === "bkash_manual") {
-            await Payment.create({
-                userId,
-                orderId: order._id,
-                amount: orderAmount,
-                currency: "BDT",
-                paymentMethod: "bkash_manual",
-                transactionId: String(transactionId).trim(),
-                status: "success",
-                processedBy: staffId,
-                completedAt: new Date(),
-                note: String(note || "").trim(),
-                cartItems: items.map((i) => ({
-                    productId: i.productId,
-                    name: i.title,
-                    price: i.price,
-                    quantity: i.quantity,
-                })),
-            });
+            await processOrderPaid(order, new Date());
         } else if (method === "bkash_online" || method === "sslcommerz_online") {
             try {
                 const gateway =
@@ -560,24 +544,61 @@ export const updateOrderPayment = async (req, res) => {
             return res.status(404).json({ message: "Payment record not found" });
         }
 
+        const adminId = req.user._id;
+        const prevPaymentStatus = String(payment.status || "");
+        const prevOrderPaymentStatus = String(order.paymentStatus || "");
+        let changed = false;
+
         if (transactionId !== undefined) {
-            payment.transactionId = String(transactionId).trim();
+            const nextTrx = String(transactionId).trim();
+            if (nextTrx !== String(payment.transactionId || "")) {
+                payment.transactionId = nextTrx;
+                changed = true;
+            }
         }
         if (note !== undefined) {
-            payment.note = String(note).trim();
+            const nextNote = String(note).trim();
+            if (nextNote !== String(payment.note || "")) {
+                payment.note = nextNote;
+                changed = true;
+            }
         }
         if (paymentStatus === "paid") {
+            if (payment.status !== "success" || order.paymentStatus !== "paid") {
+                changed = true;
+            }
             payment.status = "success";
             payment.completedAt = payment.completedAt || new Date();
+            payment.processedBy = adminId;
             order.paymentStatus = "paid";
             await processOrderPaid(order, payment.completedAt);
         } else if (paymentStatus === "unpaid") {
+            if (payment.status !== "pending" || order.paymentStatus !== "unpaid") {
+                changed = true;
+            }
             payment.status = "pending";
             order.paymentStatus = "unpaid";
         } else if (paymentStatus === "failed") {
+            if (payment.status !== "failed" || order.paymentStatus !== "failed") {
+                changed = true;
+            }
             payment.status = "failed";
             payment.failedAt = new Date();
             order.paymentStatus = "failed";
+        }
+
+        if (changed) {
+            payment.statusUpdates = payment.statusUpdates || [];
+            payment.statusUpdates.push({
+                updatedBy: adminId,
+                updatedAt: new Date(),
+                fromPaymentStatus: prevPaymentStatus,
+                toPaymentStatus: String(payment.status || ""),
+                fromOrderPaymentStatus: prevOrderPaymentStatus,
+                toOrderPaymentStatus: String(order.paymentStatus || ""),
+                transactionId: String(payment.transactionId || ""),
+                note: String(payment.note || ""),
+            });
         }
 
         await payment.save();
@@ -586,7 +607,10 @@ export const updateOrderPayment = async (req, res) => {
         const updated = await Order.findById(orderId)
             .populate("userId", "name email")
             .lean();
-        const pay = await Payment.findById(payment._id).lean();
+        const pay = await Payment.findById(payment._id)
+            .populate("processedBy", "name email role")
+            .populate("statusUpdates.updatedBy", "name email role")
+            .lean();
 
         res.json({ success: true, order: updated, payment: pay });
     } catch (err) {
@@ -834,6 +858,8 @@ export const getOrderById = async (req, res) => {
 
         const payment = await Payment.findOne({ orderId: order._id })
             .sort({ createdAt: -1 })
+            .populate("processedBy", "name email role")
+            .populate("statusUpdates.updatedBy", "name email role")
             .lean();
 
         res.json({ success: true, order, payment });

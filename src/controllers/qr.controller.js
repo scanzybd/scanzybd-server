@@ -16,6 +16,7 @@ import {
     getQrScanAccess,
     linkSubscriptionToQr,
 } from "../utils/tagSubscription.service.js";
+import { clientOrigin, qrLandingBaseUrl } from "../utils/clientOrigin.js";
 
 
 /**
@@ -68,6 +69,8 @@ export const assignQRToVehicle = async (req, res) => {
           message: "You can only assign QR to vehicles you own or registered for a customer",
         });
       }
+    } else if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     const currentIds = getQrIdsFromVehicle(vehicle);
@@ -139,6 +142,8 @@ export const unassignQRFromVehicle = async (req, res) => {
           message: "You can only manage QR on vehicles you own or registered",
         });
       }
+    } else if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     const currentIds = getQrIdsFromVehicle(vehicle);
@@ -187,7 +192,7 @@ export const generateQRs = async (req, res) => {
     const qrType = await resolveQrTypeForGenerate(rawType);
 
     // ✅ base url
-    const baseUrl = "http://scanzybd.com/qr-landing";
+    const baseUrl = qrLandingBaseUrl();
 
     // ✅ get last batch
     const lastQR = await QRModel.findOne({})
@@ -274,10 +279,10 @@ export const scanQR = async (req, res) => {
     await qr.save();
 
     if (!qr.isAssigned) {
-      return res.redirect("http://scanzybd.com/dashboard/assign-vehicle");
+      return res.redirect(`${clientOrigin()}/dashboard/assign-vehicle`);
     }
 
-    return res.redirect(`http://scanzybd.com/vehicle/${qr.vehicleId}`);
+    return res.redirect(`${clientOrigin()}/vehicle/${qr.vehicleId}`);
 
   } catch (err) {
     res.status(500).send(err.message);

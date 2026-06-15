@@ -4,6 +4,11 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendResetCodeEmail } from "../utils/mailer.js";
 import { verifyFirebaseIdToken } from "../utils/verifyFirebaseToken.js";
+import {
+    findUsersByEmail,
+    pickLoginUser,
+    pickSocialUser,
+} from "../utils/userEmailResolve.js";
 
 const INVALID_CREDENTIALS_MSG = "Invalid email or password";
 
@@ -72,6 +77,12 @@ export const register = async (req, res) => {
             user: publicUser(user),
         });
     } catch (err) {
+        if (err?.code === 11000) {
+            return res.status(400).json({
+                message:
+                    "Unable to create account with this email. Try logging in or use forgot password.",
+            });
+        }
         res.status(500).json({ message: err.message });
     }
 };
@@ -87,7 +98,7 @@ export const login = async (req, res) => {
             return res.status(400).json({ msg: "Email and password are required" });
         }
 
-        const usersWithEmail = await User.find({ email }).sort({ createdAt: -1 });
+        const usersWithEmail = await findUsersByEmail(email);
         if (!usersWithEmail.length) {
             return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
         }
@@ -96,14 +107,9 @@ export const login = async (req, res) => {
             return res.status(403).json({ msg: "Account is disabled" });
         }
 
-        let user = usersWithEmail.find(
-            (u) => typeof u.password === "string" && u.password !== ""
-        );
+        const user = pickLoginUser(usersWithEmail);
 
-        if (!user) {
-            user = usersWithEmail[0];
-        }
-        if (!user.password || typeof user.password !== "string") {
+        if (!user?.password || typeof user.password !== "string") {
             return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
         }
 
@@ -149,24 +155,40 @@ export const socialLogin = async (req, res) => {
             });
         }
 
+        if (!verified.emailVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Email must be verified before signing in",
+            });
+        }
+
         const emailNorm = verified.email;
-        const usersWithEmail = await User.find({ email: emailNorm }).sort({ createdAt: -1 });
+        const usersWithEmail = await findUsersByEmail(emailNorm);
         if (usersWithEmail.some((u) => u.isActive === false)) {
             return res.status(403).json({
                 success: false,
                 message: "Account is disabled",
             });
         }
-        let user = usersWithEmail[0] || null;
+        let user = pickSocialUser(usersWithEmail, { uid: verified.uid });
 
         if (!user) {
-            user = await User.create({
-                name: verified.name?.trim() || "Social User",
-                email: emailNorm,
-                photo: verified.photo || null,
-                uid: verified.uid || null,
-                role: "user",
-            });
+            try {
+                user = await User.create({
+                    name: verified.name?.trim() || "Social User",
+                    email: emailNorm,
+                    photo: verified.photo || null,
+                    uid: verified.uid || null,
+                    role: "user",
+                });
+            } catch (createErr) {
+                if (createErr?.code === 11000) {
+                    user = pickSocialUser(await findUsersByEmail(emailNorm), {
+                        uid: verified.uid,
+                    });
+                }
+                if (!user) throw createErr;
+            }
         } else {
             const updates = {};
             if (verified.photo && verified.photo !== user.photo) updates.photo = verified.photo;

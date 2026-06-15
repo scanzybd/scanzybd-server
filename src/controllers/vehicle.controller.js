@@ -6,7 +6,6 @@ import QRModel from "../models/QRCode.js";
 import {
     getQrIdsFromVehicle,
     normalizeVehicleDoc,
-    syncVehicleQrFields,
 } from "../utils/vehicleQr.js";
 
 /** User-facing list: paid-order, manual, or QR-assigned vehicles only. */
@@ -109,6 +108,14 @@ export const addVehicle = async (req, res) => {
             });
         }
 
+        if (qrData) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "QR codes cannot be linked here. An admin or provider must use QR assign.",
+            });
+        }
+
         const createPayload = {
             vehicleName: vehicleName || model || "Vehicle",
             model,
@@ -126,11 +133,6 @@ export const addVehicle = async (req, res) => {
             qrIds: [],
             qrData: null,
         };
-
-        if (qrData) {
-            createPayload.qrIds = [qrData];
-            syncVehicleQrFields(createPayload);
-        }
 
         const vehicle = await Vehicle.create(createPayload);
 
@@ -236,6 +238,14 @@ export const updateVehicle = async (req, res) => {
             });
         }
 
+        if (qrData !== undefined) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "QR codes cannot be linked here. An admin or provider must use QR assign.",
+            });
+        }
+
         vehicle.vehicleName = vehicleName ?? vehicle.vehicleName;
         vehicle.model = model ?? vehicle.model;
         vehicle.plate = plate ?? vehicle.plate;
@@ -246,15 +256,6 @@ export const updateVehicle = async (req, res) => {
         vehicle.emergencyContactVisible = emergencyContactVisible ?? vehicle.emergencyContactVisible;
 
         vehicle.driver = driver ?? vehicle.driver;
-        if (qrData !== undefined) {
-            if (qrData) {
-                vehicle.qrIds = getQrIdsFromVehicle(vehicle);
-                if (!vehicle.qrIds.map(String).includes(String(qrData))) {
-                    vehicle.qrIds.push(qrData);
-                }
-            }
-            syncVehicleQrFields(vehicle);
-        }
 
         await vehicle.save();
 

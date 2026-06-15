@@ -9,6 +9,7 @@ import {
     deleteOrderAndPayments,
     linkVehiclesToSourceOrder,
 } from "../utils/unpaidOrderPolicy.js";
+import { resolveOrderLineItems } from "../utils/orderCartValidation.js";
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
@@ -63,10 +64,19 @@ export const createOrder = async (req, res) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const { cartItems, amount, tagAssignments: rawSlots, shippingAddress: ship } = req.body;
+        const { cartItems, tagAssignments: rawSlots, shippingAddress: ship } = req.body;
 
         if (!Array.isArray(cartItems) || cartItems.length === 0) {
             return res.status(400).json({ message: "Cart is empty" });
+        }
+
+        let items;
+        let totalAmount;
+        try {
+            ({ items, totalAmount } = await resolveOrderLineItems(cartItems));
+        } catch (validationErr) {
+            const status = validationErr.statusCode || 400;
+            return res.status(status).json({ message: validationErr.message });
         }
 
         const shippingAddress = {
@@ -100,7 +110,7 @@ export const createOrder = async (req, res) => {
             });
         }
 
-        const totalQty = cartItems.reduce(
+        const totalQty = items.reduce(
             (sum, i) => sum + Math.max(1, Number(i.quantity) || 1),
             0
         );
@@ -221,22 +231,13 @@ export const createOrder = async (req, res) => {
             });
         }
 
-        const items = cartItems.map((i) => ({
-            productId: String(i.productId || i._id || "").trim(),
-            title: i.title || i.name || "Product",
-            image: i.image || "",
-            price: Number(i.price) || 0,
-            quantity: Math.max(1, Number(i.quantity) || 1),
-            validityDays: i.validityDays != null ? Number(i.validityDays) : undefined,
-        }));
-
         const order = await Order.create({
             userId,
             orderNo: await nextOrderNo(),
             items,
             tagAssignments,
             shippingAddress,
-            totalAmount: amount,
+            totalAmount,
             status: "pending",
             paymentStatus: "unpaid",
         });

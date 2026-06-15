@@ -62,6 +62,23 @@ const paymentSchema = new mongoose.Schema(
             ref: "User",
             default: null,
         },
+        /** Admin manual payment overrides — who changed status and when */
+        statusUpdates: [
+            {
+                updatedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                    required: true,
+                },
+                updatedAt: { type: Date, default: Date.now },
+                fromPaymentStatus: { type: String, default: "" },
+                toPaymentStatus: { type: String, default: "" },
+                fromOrderPaymentStatus: { type: String, default: "" },
+                toOrderPaymentStatus: { type: String, default: "" },
+                transactionId: { type: String, default: "" },
+                note: { type: String, default: "" },
+            },
+        ],
         note: {
             type: String,
             trim: true,

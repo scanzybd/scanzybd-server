@@ -1,6 +1,5 @@
 import Payment from "../models/Payment.js";
 import Order from "../models/Order.js";
-import { completeOnlinePayment } from "../utils/paymentCompletion.js";
 import { createOnlinePayment } from "../service/paymentInit.service.js";
 import { resolveGateway } from "../service/paymentGateway.service.js";
 
@@ -45,7 +44,7 @@ export const createPayment = async (req, res) => {
 export const confirmPayment = async (req, res) => {
     try {
         const userId = req.user?._id || req.user?.id;
-        const { paymentId, transactionId } = req.body;
+        const { paymentId } = req.body;
 
         const payment = await Payment.findById(paymentId);
 
@@ -71,11 +70,19 @@ export const confirmPayment = async (req, res) => {
             });
         }
 
-        await completeOnlinePayment(payment, { transactionId });
+        if (payment.status === "failed") {
+            return res.status(400).json({
+                success: false,
+                message: "Payment failed or was cancelled",
+            });
+        }
 
-        return res.json({
-            success: true,
-            message: "Payment successful & order updated",
+        // Payment is only marked success by gateway callbacks (bKash / SSLCommerz).
+        // Never trust client-supplied transactionId to complete payment.
+        return res.status(400).json({
+            success: false,
+            message:
+                "Payment is not completed yet. Finish payment at the gateway or wait for confirmation.",
         });
     } catch (error) {
         return res.status(500).json({

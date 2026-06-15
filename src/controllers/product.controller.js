@@ -81,10 +81,21 @@ export const addProduct = async (req, res) => {
     }
 };
 
-// 👤 My Products
+// 👤 Provider catalog by email — admin: any; provider: own email only
 export const myProducts = async (req, res) => {
     try {
-        const email = req.params.email;
+        const email = String(req.params.email || "").toLowerCase().trim();
+        if (!email) {
+            return res.status(400).send({ message: "Email is required" });
+        }
+
+        const role = String(req.user?.role || "").trim().toLowerCase();
+        if (role === "provider") {
+            const ownEmail = String(req.user.email || "").toLowerCase().trim();
+            if (email !== ownEmail) {
+                return res.status(403).send({ message: "Forbidden" });
+            }
+        }
 
         const result = await Product.find({
             "createdBy.email": email,
