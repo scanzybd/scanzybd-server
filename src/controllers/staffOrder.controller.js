@@ -153,8 +153,6 @@ export const staffCreateOrder = async (req, res) => {
             items: itemsBody,
             tagAssignments: rawSlots,
             shippingAddress,
-            amount,
-            totalAmount,
             paymentMethod,
             transactionId,
             note,
