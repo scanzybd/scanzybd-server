@@ -15,7 +15,9 @@
     "pm2:startup": "pm2 startup",
     "deploy:vercel": "vercel --prod",
     "vercel:dev": "vercel dev",
-    "backfill:subscriptions": "node scripts/backfill-order-subscriptions.mjs"
+    "backfill:subscriptions": "node scripts/backfill-order-subscriptions.mjs",
+    "seed:packages": "node scripts/seed-demo-packages.mjs",
+    "seed:packages:force": "node scripts/seed-demo-packages.mjs --force"
   },
   "type": "module",
   "keywords": [],

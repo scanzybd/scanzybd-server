@@ -128,3 +128,42 @@ export const getAllPackages = async (req, res) => {
         });
     }
 };
+
+// DELETE PACKAGE — admin only
+export const deletePackage = async (req, res) => {
+    try {
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Only admins can delete packages",
+            });
+        }
+
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid package id",
+            });
+        }
+
+        const deleted = await Package.findByIdAndDelete(id);
+        if (!deleted) {
+            return res.status(404).json({
+                success: false,
+                message: "Package not found",
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Package deleted",
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};

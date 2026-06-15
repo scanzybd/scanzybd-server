@@ -21,6 +21,7 @@ const RESOURCE_TO_GROUP = {
     payment: "payments",
     auth: "auth",
     cart: "carts",
+    settings: "settings",
 };
 
 const versions = new Map();

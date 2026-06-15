@@ -64,6 +64,11 @@ export const putCart = async (req, res) => {
 
         const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
 
+        if (rawItems.length === 0) {
+            await Cart.deleteOne({ userId });
+            return res.json({ success: true, items: [] });
+        }
+
         let items;
         try {
             ({ items } = await resolveOrderLineItems(rawItems));
