@@ -63,6 +63,7 @@ export const addVehicle = async (req, res) => {
         let {
             vehicleName,
             model,
+            tagType,
             plate,
             chassisLast4,
             engineLast4,
@@ -119,6 +120,7 @@ export const addVehicle = async (req, res) => {
         const createPayload = {
             vehicleName: vehicleName || model || "Vehicle",
             model,
+            tagType: tagType || "",
             plate,
             chassisLast4: chassisLast4 || "",
             engineLast4: engineLast4 || "",

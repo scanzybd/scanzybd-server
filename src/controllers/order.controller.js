@@ -128,6 +128,7 @@ export const createOrder = async (req, res) => {
         for (let i = 0; i < rawSlots.length; i++) {
             const slot = rawSlots[i];
             const model = String(slot.model || "").trim();
+            const tagType = String(slot.tagType || "").trim();
             const plateRaw = String(slot.plate || "").trim();
             const chassisLast4 = String(slot.chassisLast4 || "").trim();
             const engineLast4 = String(slot.engineLast4 || "").trim();
@@ -194,6 +195,7 @@ export const createOrder = async (req, res) => {
                 vehicle = await Vehicle.create({
                     vehicleName,
                     model,
+                    tagType,
                     plate,
                     chassisLast4: chassisLast4 || undefined,
                     engineLast4: engineLast4 || undefined,
@@ -211,6 +213,7 @@ export const createOrder = async (req, res) => {
                 newVehicleIds.push(vehicle._id);
             } else {
                 vehicle.model = model;
+                if (tagType) vehicle.tagType = tagType;
                 vehicle.ownerPhone = ownerPhone;
                 vehicle.emergencyPhone = emergencyPhone;
                 if (chassisLast4) vehicle.chassisLast4 = chassisLast4;

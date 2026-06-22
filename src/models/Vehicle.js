@@ -12,6 +12,12 @@ const vehicleSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        /** Tag type name (e.g. "Car Tag", "Bike Tag", "Cycle Tag") — drives driver visibility. */
+        tagType: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         plate: {
             type: String,
             required: true,
