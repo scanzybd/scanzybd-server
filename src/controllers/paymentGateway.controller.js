@@ -24,9 +24,9 @@ export const getGatewaysAdmin = async (req, res) => {
 
 export const updateGatewaysAdmin = async (req, res) => {
     try {
-        const { bkash, sslcommerz, defaultGateway } = req.body || {};
+        const { bkash, sslcommerz, defaultGateway, manualBkash } = req.body || {};
         const settings = await updatePaymentGatewaySettings(
-            { bkash, sslcommerz, defaultGateway },
+            { bkash, sslcommerz, defaultGateway, manualBkash },
             req.user._id
         );
         res.json({ success: true, settings });

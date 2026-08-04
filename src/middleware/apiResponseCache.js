@@ -5,7 +5,10 @@ const truthy = (v) => v === "1" || /^true$/i.test(String(v || ""));
 
 const enabled = () => truthy(process.env.API_CACHE_ENABLED ?? "true");
 
-const SKIP_GET_PATH_PREFIXES = ["/api/payment/bkash/callback"];
+const SKIP_GET_PATH_PREFIXES = [
+    "/api/payment/bkash/callback",
+    "/api/payment/gateways",
+];
 
 const RESOURCE_TO_GROUP = {
     products: "products",

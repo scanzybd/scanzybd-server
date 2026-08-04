@@ -1,7 +1,7 @@
-import axios from "axios";
+import { v2 as cloudinary } from "cloudinary";
 import { compressProductImage } from "../utils/compressProductImage.js";
 
-function sanitizeApiKey(raw) {
+function sanitizeEnv(raw) {
   if (!raw || typeof raw !== "string") return "";
   let k = raw.trim();
   if (
@@ -13,19 +13,30 @@ function sanitizeApiKey(raw) {
   return k.replace(/\r|\n/g, "").trim();
 }
 
-function imgbbErrorMessage(payload) {
-  if (!payload || typeof payload !== "object") return null;
-  const e = payload.error;
-  if (typeof e === "string") return e;
-  if (e?.message) return typeof e.message === "string" ? e.message : JSON.stringify(e.message);
-  return payload.status_txt || null;
+function configureCloudinary() {
+  const cloud_name = sanitizeEnv(process.env.CLOUDINARY_CLOUD_NAME);
+  const api_key = sanitizeEnv(process.env.CLOUDINARY_API_KEY);
+  const api_secret = sanitizeEnv(process.env.CLOUDINARY_API_SECRET);
+
+  if (!cloud_name || !api_key || !api_secret) {
+    return null;
+  }
+
+  cloudinary.config({
+    cloud_name,
+    api_key,
+    api_secret,
+    secure: true,
+  });
+
+  return cloudinary;
 }
 
 /**
  * POST body: { image: string } — base64 or full data URL (e.g. from FileReader.readAsDataURL).
- * Forwards to ImgBB v1 and returns the hosted URL for storing on Product, etc.
+ * Uploads to Cloudinary and returns the hosted HTTPS URL for Product / settings images.
  */
-export const uploadToImgbb = async (req, res) => {
+export const uploadToCloudinary = async (req, res) => {
   try {
     const { image } = req.body;
 
@@ -36,75 +47,71 @@ export const uploadToImgbb = async (req, res) => {
       });
     }
 
-    const key = sanitizeApiKey(process.env.IMGBB_API_KEY);
-    if (!key) {
+    const cld = configureCloudinary();
+    if (!cld) {
       return res.status(500).json({
         success: false,
-        message: "Server missing IMGBB_API_KEY — add it to server .env and restart",
+        message:
+          "Server missing Cloudinary config — set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in server .env and restart",
       });
     }
 
     let base64 = image.trim();
-    if (base64.includes("base64,")) {
+    let mime = "image/jpeg";
+    const dataUrlMatch = /^data:([^;]+);base64,/i.exec(base64);
+    if (dataUrlMatch) {
+      mime = dataUrlMatch[1] || mime;
+      base64 = base64.slice(dataUrlMatch[0].length);
+    } else if (base64.includes("base64,")) {
       base64 = base64.split("base64,")[1];
     }
     base64 = base64.replace(/\s/g, "");
 
+    let uploadBuffer;
     try {
       const rawBuffer = Buffer.from(base64, "base64");
-      const compressed = await compressProductImage(rawBuffer);
-      base64 = compressed.toString("base64");
+      uploadBuffer = await compressProductImage(rawBuffer);
+      mime = "image/jpeg";
     } catch (compressErr) {
       console.warn(
         "Product image compression skipped, uploading original:",
         compressErr.message
       );
+      uploadBuffer = Buffer.from(base64, "base64");
     }
 
-    // Must encode for x-www-form-urlencoded so '+' / '=' in base64 are not corrupted
-    const body = `key=${encodeURIComponent(key)}&image=${encodeURIComponent(base64)}`;
+    const dataUri = `data:${mime};base64,${uploadBuffer.toString("base64")}`;
+    const folder = sanitizeEnv(process.env.CLOUDINARY_UPLOAD_FOLDER) || "scanzybd";
 
-    const { data, status } = await axios.post(
-      "https://api.imgbb.com/1/upload",
-      body,
-      {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        maxBodyLength: 32 * 1024 * 1024,
-        maxContentLength: 32 * 1024 * 1024,
-        validateStatus: () => true,
-      }
-    );
+    const result = await cld.uploader.upload(dataUri, {
+      folder,
+      resource_type: "image",
+      overwrite: false,
+    });
 
-    if (status >= 400) {
-      const msg =
-        imgbbErrorMessage(data) ||
-        (typeof data === "string" ? data : null) ||
-        `ImgBB HTTP ${status}`;
-      console.error("ImgBB HTTP error:", status, data);
-      return res.status(502).json({ success: false, message: msg });
-    }
-
-    if (!data.success || !data.data?.url) {
-      const msg =
-        imgbbErrorMessage(data) ||
-        "ImgBB did not return an image URL (check API key and image size)";
-      console.error("ImgBB logical error:", data);
-      return res.status(400).json({ success: false, message: msg });
+    const url = result.secure_url || result.url;
+    if (!url) {
+      return res.status(502).json({
+        success: false,
+        message: "Cloudinary did not return an image URL",
+      });
     }
 
     return res.status(200).json({
       success: true,
-      url: data.data.url,
-      displayUrl: data.data.display_url,
-      deleteUrl: data.data.delete_url,
+      url,
+      displayUrl: url,
+      publicId: result.public_id,
     });
   } catch (err) {
-    console.error("ImgBB upload error:", err.response?.data || err.message);
-    const payload = err.response?.data;
+    console.error("Cloudinary upload error:", err?.message || err);
     const msg =
-      imgbbErrorMessage(payload) ||
-      err.message ||
+      err?.error?.message ||
+      err?.message ||
       "Upload failed";
     return res.status(500).json({ success: false, message: msg });
   }
 };
+
+/** @deprecated Use uploadToCloudinary — kept so old /imgbb clients keep working */
+export const uploadToImgbb = uploadToCloudinary;

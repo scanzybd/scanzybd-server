@@ -113,6 +113,7 @@ const orderSchema = new mongoose.Schema(
                 "sslcommerz_online",
                 "cash",
                 "bkash_manual",
+                "manual_bkash",
                 "bkash",
                 "sslcommerz",
             ],

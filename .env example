@@ -27,6 +27,12 @@
 
 ; BKASH_BACKEND_CALLBACK_URL=http://localhost:5000/api/payment/bkash/callback
 
+; # ================= Manual bKash (customer checkout — phase 1 via env) =================
+; MANUAL_BKASH_ENABLED=false
+; MANUAL_BKASH_QR_URL=https://example.com/bkash-qr.png
+; MANUAL_BKASH_NUMBER=01XXXXXXXXX
+; MANUAL_BKASH_INSTRUCTIONS=Send exact amount via bKash, then enter last 8 digits of Trx ID
+
 ; BKASH_FRONTEND_SUCCESS_URL=http://localhost:5173/user/payment/success
 ; BKASH_FRONTEND_FAIL_URL=http://localhost:5173/user/payment/failed
 
@@ -40,8 +46,11 @@
 ; SSLCOMMERZ_CANCEL_URL=http://localhost:5000/api/payment/sslcommerz/cancel
 ; SSLCOMMERZ_IPN_URL=http://localhost:5000/api/payment/sslcommerz/ipn
 
-; # ImgBB (product image upload — same key you may use client-side only for reference)
-; IMGBB_API_KEY=8f4de2e175488bd4ebea8fa976877b06
+; # Cloudinary (product / settings image upload — Dashboard → Settings → API Keys)
+; CLOUDINARY_CLOUD_NAME=hrpgvoeg
+; CLOUDINARY_API_KEY=
+; CLOUDINARY_API_SECRET=
+; CLOUDINARY_UPLOAD_FOLDER=scanzybd
 
 ; # ================= SMTP (Forgot Password Mail) =================
 ; # Gmail use করলে SMTP_SERVICE দিন; custom SMTP use করলে SMTP_HOST/PORT/SECURE দিন।

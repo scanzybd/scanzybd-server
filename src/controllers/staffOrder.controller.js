@@ -21,6 +21,10 @@ import {
     unpaidOrderCutoffDate,
 } from "../utils/unpaidOrderPolicy.js";
 import { resolveOrderLineItems } from "../utils/orderCartValidation.js";
+import {
+    assertManualTransactionIdUnique,
+    normalizeManualTransactionId,
+} from "../utils/transactionId.js";
 
 const nextOrderNo = async () => {
     const row = await Counter.findOneAndUpdate(
@@ -550,13 +554,11 @@ export const updateOrderPayment = async (req, res) => {
         const prevOrderPaymentStatus = String(order.paymentStatus || "");
         let changed = false;
 
-        if (transactionId !== undefined) {
-            const nextTrx = String(transactionId).trim();
-            if (nextTrx !== String(payment.transactionId || "")) {
-                payment.transactionId = nextTrx;
-                changed = true;
-            }
-        }
+        const paymentMethod = String(
+            payment.paymentMethod || order.paymentMethod || ""
+        ).toLowerCase();
+        const nextPaymentStatus = String(paymentStatus || "").toLowerCase();
+
         if (note !== undefined) {
             const nextNote = String(note).trim();
             if (nextNote !== String(payment.note || "")) {
@@ -564,7 +566,49 @@ export const updateOrderPayment = async (req, res) => {
                 changed = true;
             }
         }
-        if (paymentStatus === "paid") {
+
+        if (nextPaymentStatus === "paid") {
+            if (transactionId !== undefined) {
+                const nextTrx = String(transactionId).trim();
+                if (nextTrx) {
+                    let normalizedTrx = nextTrx;
+                    if (paymentMethod === "manual_bkash") {
+                        try {
+                            normalizedTrx = normalizeManualTransactionId(nextTrx);
+                            await assertManualTransactionIdUnique(normalizedTrx, payment._id);
+                        } catch (err) {
+                            return res.status(err.statusCode || 400).json({
+                                message: err.message,
+                            });
+                        }
+                    }
+                    if (normalizedTrx !== String(payment.transactionId || "")) {
+                        payment.transactionId = normalizedTrx;
+                        changed = true;
+                    }
+                }
+            }
+
+            const trxToVerify = String(payment.transactionId || "").trim();
+            if (paymentMethod === "manual_bkash" && !trxToVerify) {
+                return res.status(400).json({
+                    message: "Transaction ID is required to approve manual bKash payment",
+                });
+            }
+            if (trxToVerify && paymentMethod === "manual_bkash") {
+                try {
+                    const normalized = normalizeManualTransactionId(trxToVerify);
+                    await assertManualTransactionIdUnique(normalized, payment._id);
+                    payment.transactionId = normalized;
+                } catch (err) {
+                    return res.status(err.statusCode || 400).json({
+                        message: err.message,
+                    });
+                }
+            }
+            const wasAlreadyPaid =
+                prevPaymentStatus === "success" &&
+                prevOrderPaymentStatus === "paid";
             if (payment.status !== "success" || order.paymentStatus !== "paid") {
                 changed = true;
             }
@@ -572,14 +616,16 @@ export const updateOrderPayment = async (req, res) => {
             payment.completedAt = payment.completedAt || new Date();
             payment.processedBy = adminId;
             order.paymentStatus = "paid";
-            await processOrderPaid(order, payment.completedAt);
-        } else if (paymentStatus === "unpaid") {
+            if (!wasAlreadyPaid) {
+                await processOrderPaid(order, payment.completedAt);
+            }
+        } else if (nextPaymentStatus === "unpaid") {
             if (payment.status !== "pending" || order.paymentStatus !== "unpaid") {
                 changed = true;
             }
             payment.status = "pending";
             order.paymentStatus = "unpaid";
-        } else if (paymentStatus === "failed") {
+        } else if (nextPaymentStatus === "failed") {
             if (payment.status !== "failed" || order.paymentStatus !== "failed") {
                 changed = true;
             }

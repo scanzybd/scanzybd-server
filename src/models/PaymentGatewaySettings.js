@@ -7,6 +7,16 @@ const gatewayToggleSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const manualBkashSchema = new mongoose.Schema(
+    {
+        enabled: { type: Boolean, default: false },
+        qrImageUrl: { type: String, trim: true, default: "" },
+        merchantNumber: { type: String, trim: true, default: "" },
+        instructions: { type: String, trim: true, default: "" },
+    },
+    { _id: false }
+);
+
 const paymentGatewaySettingsSchema = new mongoose.Schema(
     {
         key: { type: String, default: "global", unique: true },
@@ -17,6 +27,15 @@ const paymentGatewaySettingsSchema = new mongoose.Schema(
         sslcommerz: {
             type: gatewayToggleSchema,
             default: () => ({ enabled: false }),
+        },
+        manualBkash: {
+            type: manualBkashSchema,
+            default: () => ({
+                enabled: false,
+                qrImageUrl: "",
+                merchantNumber: "",
+                instructions: "",
+            }),
         },
         defaultGateway: {
             type: String,

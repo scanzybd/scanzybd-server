@@ -453,7 +453,11 @@ export const getMyOrders = async (req, res) => {
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
         const skip = (page - 1) * limit;
 
-        const filter = { userId, paymentStatus: "paid" };
+        const filter = { userId };
+        const statusParam = String(req.query.paymentStatus || "").toLowerCase();
+        if (["paid", "unpaid", "failed"].includes(statusParam)) {
+            filter.paymentStatus = statusParam;
+        }
 
         const [orders, total] = await Promise.all([
             Order.find(filter)

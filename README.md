@@ -87,7 +87,7 @@ Copy `.env example` to `.env`. **Never commit real secrets.**
 |----------|---------|
 | `PORT` | Local server port (default 5000) |
 | `CRON_SECRET` | Authorize cron endpoints (`Authorization: Bearer` or `x-cron-secret`) |
-| `IMGBB_API_KEY` | `POST /api/upload/imgbb` |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | `POST /api/upload/image` (product & settings images) |
 | `SMTP_*` | Password reset email (`utils/mailer.js`) |
 | `API_CACHE_ENABLED`, `API_CACHE_TTL_MS`, `API_CACHE_MAX` | GET response LRU cache |
 | `MONGODB_USE_SRV` | Try `mongodb+srv://` if direct URI fails |

@@ -5,6 +5,7 @@ import {
     createPayment,
     confirmPayment,
     getUserPayments,
+    submitManualPayment,
 } from "../controllers/payment.controller.js";
 import { bkashCallback } from "../controllers/bkashCallback.controller.js";
 import {
@@ -29,6 +30,7 @@ router.get("/admin/gateways", verifyToken, isAdmin, getGatewaysAdmin);
 router.patch("/admin/gateways", verifyToken, isAdmin, updateGatewaysAdmin);
 
 router.post("/create", verifyToken, paymentCreateRateLimit, createPayment);
+router.post("/manual/submit", verifyToken, paymentCreateRateLimit, submitManualPayment);
 router.get("/bkash/callback", bkashCallback);
 router.post("/sslcommerz/success", sslcommerzSuccess);
 router.get("/sslcommerz/success", sslcommerzSuccess);
