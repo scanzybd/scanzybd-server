@@ -8,6 +8,7 @@ const UPDATE_FIELDS = new Set([
     "price",
     "originalPrice",
     "image",
+    "images",
     "type",
     "packInfo",
     "validityDays",
@@ -15,6 +16,7 @@ const UPDATE_FIELDS = new Set([
     "reviews",
     "inStock",
     "isActive",
+    "isFeatured",
     "features",
     "specifications",
 ]);
@@ -23,6 +25,38 @@ const UPDATE_FIELDS = new Set([
 const PUBLIC_PRODUCT_FILTER = { isActive: { $ne: false } };
 
 const PRODUCT_SORT = { displayOrder: 1, createdAt: -1 };
+
+const MAX_PRODUCT_IMAGES = 4;
+
+/** Normalize cover `image` + gallery `images` (max 4). */
+function normalizeProductImages({ image, images } = {}) {
+    const list = [];
+    const push = (u) => {
+        if (typeof u !== "string") return;
+        const t = u.trim();
+        if (!t || list.includes(t)) return;
+        list.push(t);
+    };
+
+    if (Array.isArray(images)) {
+        for (const u of images) push(u);
+    }
+    push(image);
+
+    const normalized = list.slice(0, MAX_PRODUCT_IMAGES);
+    return {
+        images: normalized,
+        image: normalized[0] || "",
+    };
+}
+
+/** Ensure only one product is featured (homepage spotlight). */
+async function setExclusiveFeatured(productId) {
+    await Product.updateMany(
+        { _id: { $ne: productId }, isFeatured: true },
+        { $set: { isFeatured: false } }
+    );
+}
 
 /** Assign displayOrder to legacy products that never had one */
 async function ensureProductDisplayOrders() {
@@ -49,6 +83,14 @@ export const addProduct = async (req, res) => {
 
         const { createdBy: _c, _id: _i, createdAt: _a, displayOrder: _d, ...rest } = req.body;
 
+        const media = normalizeProductImages(rest);
+        if (!media.image) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one product image is required",
+            });
+        }
+
         const top = await Product.findOne({ displayOrder: { $ne: null } })
             .sort({ displayOrder: -1 })
             .select("displayOrder")
@@ -57,6 +99,7 @@ export const addProduct = async (req, res) => {
 
         const result = await Product.create({
             ...rest,
+            ...media,
             displayOrder: nextOrder,
             createdBy: {
                 name: dbUser.name,
@@ -65,6 +108,10 @@ export const addProduct = async (req, res) => {
             },
             createdAt: new Date(),
         });
+
+        if (result.isFeatured === true) {
+            await setExclusiveFeatured(result._id);
+        }
 
         res.status(201).send({
             success: true,
@@ -129,6 +176,26 @@ export const getProductById = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to fetch product",
+        });
+    }
+};
+
+/** Public homepage spotlight product (isFeatured + active) */
+export const getFeaturedProduct = async (req, res) => {
+    try {
+        const product = await Product.findOne({
+            isFeatured: true,
+            ...PUBLIC_PRODUCT_FILTER,
+        }).lean();
+
+        res.status(200).json({
+            success: true,
+            data: product || null,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch featured product",
         });
     }
 };
@@ -216,6 +283,28 @@ export const updateProduct = async (req, res) => {
         }
         if (patch.isActive !== undefined && typeof patch.isActive !== "boolean") {
             return res.status(400).json({ success: false, message: "isActive must be boolean" });
+        }
+        if (patch.isFeatured !== undefined && typeof patch.isFeatured !== "boolean") {
+            return res.status(400).json({ success: false, message: "isFeatured must be boolean" });
+        }
+
+        if (body.images !== undefined || body.image !== undefined) {
+            const media = normalizeProductImages({
+                image: body.image !== undefined ? body.image : existing.image,
+                images: body.images !== undefined ? body.images : existing.images,
+            });
+            if (!media.image) {
+                return res.status(400).json({
+                    success: false,
+                    message: "At least one product image is required",
+                });
+            }
+            patch.image = media.image;
+            patch.images = media.images;
+        }
+
+        if (patch.isFeatured === true) {
+            await setExclusiveFeatured(id);
         }
 
         const updated = await Product.findByIdAndUpdate(

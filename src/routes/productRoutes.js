@@ -7,6 +7,7 @@ import {
     addProduct,
     getAllProducts,
     getDashboardProducts,
+    getFeaturedProduct,
     getProductById,
     myProducts,
     reorderProducts,
@@ -16,6 +17,7 @@ import { isAdmin, isAdminOrProvider, isProvider, verifyToken } from "../middlewa
 
 router.post("/", verifyToken, isAdmin, addProduct);
 router.get("/", getAllProducts);
+router.get("/featured", getFeaturedProduct);
 router.get("/mine", verifyToken, isProvider, getDashboardProducts);
 router.get("/my/:email", verifyToken, isAdminOrProvider, myProducts);
 router.patch("/reorder", verifyToken, isAdmin, reorderProducts);
