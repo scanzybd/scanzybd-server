@@ -8,9 +8,9 @@ const require = createRequire(
 );
 const sharp = require("sharp");
 
-const MAX_WIDTH = 800;
-const MAX_HEIGHT = 600;
-const WEBP_QUALITY = 80;
+const MAX_WIDTH = 1200;
+const MAX_HEIGHT = 1200;
+const WEBP_QUALITY = 85;
 
 /**
  * Resize product images for catalog/detail pages (WebP, no upscale).

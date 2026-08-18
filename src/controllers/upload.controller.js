@@ -71,7 +71,7 @@ export const uploadToCloudinary = async (req, res) => {
     try {
       const rawBuffer = Buffer.from(base64, "base64");
       uploadBuffer = await compressProductImage(rawBuffer);
-      mime = "image/jpeg";
+      mime = "image/webp";
     } catch (compressErr) {
       console.warn(
         "Product image compression skipped, uploading original:",
