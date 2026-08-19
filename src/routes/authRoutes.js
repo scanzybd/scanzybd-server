@@ -6,6 +6,7 @@ import {
   login,
   register,
   resetPassword,
+  changePassword,
   socialLogin,
   verifyResetCode,
   logout,
@@ -31,6 +32,7 @@ router.post("/social", socialLoginRateLimit, socialLogin);
 router.post("/forgot-password", forgotPasswordRateLimit, forgotPassword);
 router.post("/verify-reset-code", forgotPasswordRateLimit, verifyResetCode);
 router.post("/reset-password", forgotPasswordRateLimit, resetPassword);
+router.post("/change-password", verifyToken, changePassword);
 router.get("/me", verifyToken, getMe);
 router.patch("/me", verifyToken, updateMe);
 router.post("/logout", verifyToken, logout);

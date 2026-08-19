@@ -16,7 +16,6 @@ import {
     revokeAllSessionsForUser,
     revokeSessionForUser,
 } from "../utils/sessionService.js";
-import { SESSION_REVOKED_CODE, SESSION_REVOKED_MESSAGE } from "../middleware/auth.js";
 
 const INVALID_CREDENTIALS_MSG = "Invalid email or password";
 
@@ -35,7 +34,11 @@ function publicUser(user) {
 
 /** Backend app JWT: 24h — returns token + expiresAt (ms) for client storage */
 function signAppJwt(user, sessionId = null) {
-    const payload = { id: user._id, role: user.role };
+    const payload = {
+        id: user._id,
+        role: user.role,
+        tv: user.tokenVersion ?? 0,
+    };
     if (sessionId) {
         payload.sid = sessionId;
     }
@@ -391,16 +394,84 @@ export const resetPassword = async (req, res) => {
         }
 
         const hashed = await bcrypt.hash(newPassword, 10);
-        await User.findByIdAndUpdate(user._id, {
-            password: hashed,
-            resetCodeHash: null,
-            resetCodeExpiresAt: null,
-        });
+        await User.findByIdAndUpdate(
+            user._id,
+            {
+                $set: {
+                    password: hashed,
+                    resetCodeHash: null,
+                    resetCodeExpiresAt: null,
+                },
+                $inc: { tokenVersion: 1 },
+            }
+        );
         await revokeAllSessionsForUser(user._id);
 
-        return res.json({ success: true, message: "Password reset successful" });
+        return res.json({
+            success: true,
+            message:
+                "Password reset successful. All devices have been signed out — sign in again with your new password.",
+        });
     } catch (err) {
         return res.status(500).json({ message: err.message || "Could not reset password" });
+    }
+};
+
+export const changePassword = async (req, res) => {
+    try {
+        const currentPassword = String(req.body?.currentPassword || "");
+        const newPassword = String(req.body?.newPassword || "");
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                message: "currentPassword and newPassword are required",
+            });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        if (!user.password) {
+            return res.status(400).json({
+                message: "This account uses social sign-in. Use forgot password or sign in with Google.",
+            });
+        }
+
+        const ok = await bcrypt.compare(currentPassword, user.password);
+        if (!ok) {
+            return res.status(400).json({ message: "Current password is incorrect" });
+        }
+
+        const samePassword = await bcrypt.compare(newPassword, user.password);
+        if (samePassword) {
+            return res.status(400).json({ message: "New password must be different" });
+        }
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        const updated = await User.findByIdAndUpdate(
+            user._id,
+            {
+                $set: { password: hashed },
+                $inc: { tokenVersion: 1 },
+            },
+            { new: true }
+        );
+        await revokeAllSessionsForUser(user._id);
+
+        const signed = await issueAuthTokens(updated, req);
+        return res.json({
+            success: true,
+            message:
+                "Password changed. Other devices have been signed out.",
+            token: signed.token,
+            expiresAt: signed.expiresAt,
+            user: publicUser(updated),
+        });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not change password" });
     }
 };
 
@@ -463,5 +534,3 @@ export const revokeSession = async (req, res) => {
         return res.status(500).json({ message: err.message || "Could not revoke session" });
     }
 };
-
-export { SESSION_REVOKED_CODE, SESSION_REVOKED_MESSAGE };

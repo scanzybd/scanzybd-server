@@ -10,6 +10,10 @@ export const SESSION_REVOKED_CODE = "SESSION_REVOKED";
 export const SESSION_REVOKED_MESSAGE =
     "Your session ended because you signed in on another device or revoked this session.";
 
+export const TOKEN_REVOKED_CODE = "TOKEN_REVOKED";
+export const TOKEN_REVOKED_MESSAGE =
+    "Your session ended because your password was changed. Please sign in again.";
+
 const buildReqUser = (dbUser, sessionId = null) => ({
     _id: dbUser._id,
     email: dbUser.email,
@@ -26,6 +30,14 @@ const verifyAppJwt = async (token, { touchLastSeen = false } = {}) => {
     }
     if (dbUser.isActive === false) {
         throw new Error("Account is disabled");
+    }
+
+    const tokenVersion = decoded.tv ?? 0;
+    const dbTokenVersion = dbUser.tokenVersion ?? 0;
+    if (tokenVersion !== dbTokenVersion) {
+        const err = new Error(TOKEN_REVOKED_MESSAGE);
+        err.code = TOKEN_REVOKED_CODE;
+        throw err;
     }
 
     const sessionId = decoded.sid || null;
@@ -60,6 +72,12 @@ export const verifyToken = async (req, res, next) => {
             return res.status(401).json({
                 message: SESSION_REVOKED_MESSAGE,
                 code: SESSION_REVOKED_CODE,
+            });
+        }
+        if (err?.code === TOKEN_REVOKED_CODE) {
+            return res.status(401).json({
+                message: TOKEN_REVOKED_MESSAGE,
+                code: TOKEN_REVOKED_CODE,
             });
         }
         return res.status(401).json({ message: "Invalid token" });

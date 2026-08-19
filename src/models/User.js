@@ -53,6 +53,11 @@ const userSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        /** Bumped on password change/reset — invalidates all existing JWTs (including legacy). */
+        tokenVersion: {
+            type: Number,
+            default: 0,
+        },
     },
     {
         timestamps: true, // 🔥 createdAt, updatedAt
