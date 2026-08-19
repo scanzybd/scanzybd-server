@@ -9,6 +9,14 @@ import {
     pickLoginUser,
     pickSocialUser,
 } from "../utils/userEmailResolve.js";
+import {
+    createStaffSession,
+    isStaffRole,
+    listSessionsForUser,
+    revokeAllSessionsForUser,
+    revokeSessionForUser,
+} from "../utils/sessionService.js";
+import { SESSION_REVOKED_CODE, SESSION_REVOKED_MESSAGE } from "../middleware/auth.js";
 
 const INVALID_CREDENTIALS_MSG = "Invalid email or password";
 
@@ -26,15 +34,38 @@ function publicUser(user) {
 }
 
 /** Backend app JWT: 24h — returns token + expiresAt (ms) for client storage */
-function signAppJwt(user) {
-    const token = jwt.sign(
-        { id: user._id, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: "24h" }
-    );
+function signAppJwt(user, sessionId = null) {
+    const payload = { id: user._id, role: user.role };
+    if (sessionId) {
+        payload.sid = sessionId;
+    }
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "24h" });
     const decoded = jwt.decode(token);
     const expiresAt = decoded?.exp ? decoded.exp * 1000 : Date.now() + 24 * 60 * 60 * 1000;
-    return { token, expiresAt };
+    return { token, expiresAt, sessionId };
+}
+
+async function issueAuthTokens(user, req) {
+    let sessionId = null;
+    if (isStaffRole(user.role)) {
+        await revokeAllSessionsForUser(user._id);
+        const session = await createStaffSession(user, req);
+        sessionId = session.sessionId;
+    }
+    const signed = signAppJwt(user, sessionId);
+    return signed;
+}
+
+function serializeSession(session, currentSessionId) {
+    return {
+        sessionId: session.sessionId,
+        label: session.label || "Unknown device",
+        userAgent: session.userAgent || "",
+        ip: session.ip || "",
+        createdAt: session.createdAt,
+        lastSeenAt: session.lastSeenAt || session.updatedAt || session.createdAt,
+        isCurrent: Boolean(currentSessionId && session.sessionId === currentSessionId),
+    };
 }
 
 // ================= REGISTER =================
@@ -118,7 +149,7 @@ export const login = async (req, res) => {
             return res.status(401).json({ msg: INVALID_CREDENTIALS_MSG });
         }
 
-        const { token, expiresAt } = signAppJwt(user);
+        const { token, expiresAt } = await issueAuthTokens(user, req);
 
         res.json({ token, expiresAt, user: publicUser(user) });
     } catch (err) {
@@ -201,7 +232,7 @@ export const socialLogin = async (req, res) => {
             }
         }
 
-        const { token: appToken, expiresAt } = signAppJwt(user);
+        const { token: appToken, expiresAt } = await issueAuthTokens(user, req);
 
         return res.json({
             success: true,
@@ -365,9 +396,72 @@ export const resetPassword = async (req, res) => {
             resetCodeHash: null,
             resetCodeExpiresAt: null,
         });
+        await revokeAllSessionsForUser(user._id);
 
         return res.json({ success: true, message: "Password reset successful" });
     } catch (err) {
         return res.status(500).json({ message: err.message || "Could not reset password" });
     }
 };
+
+export const logout = async (req, res) => {
+    try {
+        if (req.user?.sessionId) {
+            await revokeSessionForUser(req.user._id, req.user.sessionId);
+        }
+        return res.json({ success: true });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not log out" });
+    }
+};
+
+export const sessionCheck = async (req, res) => {
+    return res.json({
+        ok: true,
+        sessionId: req.user?.sessionId || null,
+    });
+};
+
+export const listSessions = async (req, res) => {
+    try {
+        if (!isStaffRole(req.user?.role)) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const sessions = await listSessionsForUser(req.user._id);
+        return res.json({
+            sessions: sessions.map((session) =>
+                serializeSession(session, req.user.sessionId)
+            ),
+        });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not list sessions" });
+    }
+};
+
+export const revokeSession = async (req, res) => {
+    try {
+        if (!isStaffRole(req.user?.role)) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const sessionId = String(req.params.sessionId || "").trim();
+        if (!sessionId) {
+            return res.status(400).json({ message: "sessionId is required" });
+        }
+
+        const result = await revokeSessionForUser(req.user._id, sessionId);
+        if (!result.deletedCount) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+
+        return res.json({
+            success: true,
+            revokedCurrent: sessionId === req.user.sessionId,
+        });
+    } catch (err) {
+        return res.status(500).json({ message: err.message || "Could not revoke session" });
+    }
+};
+
+export { SESSION_REVOKED_CODE, SESSION_REVOKED_MESSAGE };

@@ -1,14 +1,24 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import {
+    findActiveSession,
+    isStaffRole,
+    touchSession,
+} from "../utils/sessionService.js";
 
-const buildReqUser = (dbUser) => ({
+export const SESSION_REVOKED_CODE = "SESSION_REVOKED";
+export const SESSION_REVOKED_MESSAGE =
+    "Your session ended because you signed in on another device or revoked this session.";
+
+const buildReqUser = (dbUser, sessionId = null) => ({
     _id: dbUser._id,
     email: dbUser.email,
     uid: dbUser.uid || null,
     role: dbUser.role,
+    sessionId: sessionId || null,
 });
 
-const verifyAppJwt = async (token) => {
+const verifyAppJwt = async (token, { touchLastSeen = false } = {}) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const dbUser = await User.findById(decoded.id).lean();
     if (!dbUser) {
@@ -17,7 +27,21 @@ const verifyAppJwt = async (token) => {
     if (dbUser.isActive === false) {
         throw new Error("Account is disabled");
     }
-    return buildReqUser(dbUser);
+
+    const sessionId = decoded.sid || null;
+    if (isStaffRole(dbUser.role) && sessionId) {
+        const session = await findActiveSession(sessionId, dbUser._id);
+        if (!session) {
+            const err = new Error(SESSION_REVOKED_MESSAGE);
+            err.code = SESSION_REVOKED_CODE;
+            throw err;
+        }
+        if (touchLastSeen) {
+            await touchSession(sessionId, dbUser._id);
+        }
+    }
+
+    return buildReqUser(dbUser, sessionId);
 };
 
 export const verifyToken = async (req, res, next) => {
@@ -28,10 +52,16 @@ export const verifyToken = async (req, res, next) => {
             return res.status(401).json({ message: "No token" });
         }
 
-        req.user = await verifyAppJwt(token);
+        req.user = await verifyAppJwt(token, { touchLastSeen: true });
 
         next();
     } catch (err) {
+        if (err?.code === SESSION_REVOKED_CODE) {
+            return res.status(401).json({
+                message: SESSION_REVOKED_MESSAGE,
+                code: SESSION_REVOKED_CODE,
+            });
+        }
         return res.status(401).json({ message: "Invalid token" });
     }
 };
@@ -92,3 +122,5 @@ export const optionalVerifyToken = async (req, res, next) => {
     }
     next();
 };
+
+export { verifyAppJwt };

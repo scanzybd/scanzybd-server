@@ -8,6 +8,10 @@ import {
   resetPassword,
   socialLogin,
   verifyResetCode,
+  logout,
+  sessionCheck,
+  listSessions,
+  revokeSession,
 } from "../controllers/auth.controller.js";
 import { verifyToken } from "../middleware/auth.js";
 import {
@@ -29,6 +33,10 @@ router.post("/verify-reset-code", forgotPasswordRateLimit, verifyResetCode);
 router.post("/reset-password", forgotPasswordRateLimit, resetPassword);
 router.get("/me", verifyToken, getMe);
 router.patch("/me", verifyToken, updateMe);
+router.post("/logout", verifyToken, logout);
+router.get("/session-check", verifyToken, sessionCheck);
+router.get("/sessions", verifyToken, listSessions);
+router.delete("/sessions/:sessionId", verifyToken, revokeSession);
 
 
 export default router; 
