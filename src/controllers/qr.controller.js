@@ -265,18 +265,45 @@ export const generateQRs = async (req, res) => {
 /**
  * Scan QR
  */
+// export const scanQR = async (req, res) => {
+//   try {
+//     const { code } = req.params;
+
+//     const qr = await QRModel.findOne({ code });
+
+//     if (!qr) {
+//       return res.status(404).send("QR not found");
+//     }
+
+//     qr.scanCount += 1; // ✅ now safe
+//     await qr.save();
+
+//     if (!qr.isAssigned) {
+//       return res.redirect(`${clientOrigin()}/dashboard/assign-vehicle`);
+//     }
+
+//     return res.redirect(`${clientOrigin()}/vehicle/${qr.vehicleId}`);
+
+//   } catch (err) {
+//     res.status(500).send(err.message);
+//   }
+// };
+
+
+
 export const scanQR = async (req, res) => {
   try {
     const { code } = req.params;
 
-    const qr = await QRModel.findOne({ code });
+    const qr = await QRModel.findOneAndUpdate(
+      { code },
+      { $inc: { scanCount: 1 } },
+      { new: true }
+    ).lean();
 
     if (!qr) {
       return res.status(404).send("QR not found");
     }
-
-    qr.scanCount += 1; // ✅ now safe
-    await qr.save();
 
     if (!qr.isAssigned) {
       return res.redirect(`${clientOrigin()}/dashboard/assign-vehicle`);
@@ -435,49 +462,107 @@ export const getAllQR = async (req, res) => {
 };
 
 
+// export const getQRByCode = async (req, res) => {
+//   try {
+//     const { code } = req.params;
+
+//     if (!code) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "QR code is required",
+//       });
+//     }
+
+//     // 🔥 CODE দিয়ে search
+//     const qr = await QRModel.findOne({ code });
+
+//     if (!qr) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "QR not found",
+//       });
+//     }
+
+//     let vehicle = null;
+
+//     // ✅ যদি assigned থাকে → vehicle load
+//     if (qr.status === "assigned" && qr.vehicleId) {
+//       vehicle = await Vehicle.findById(qr.vehicleId);
+//     }
+
+//     const scanAccess = await getQrScanAccess(qr);
+//     let vehicleOut = vehicle;
+
+//     if (vehicle && !scanAccess.allowContact) {
+//       const v = vehicle.toObject ? vehicle.toObject() : { ...vehicle };
+//       vehicleOut = {
+//         ...v,
+//         ownerPhone: "",
+//         emergencyPhone: "",
+//         ownerContactVisible: false,
+//         driverContactVisible: false,
+//         emergencyContactVisible: false,
+//         driver: v.driver
+//           ? { ...v.driver, phone: "" }
+//           : v.driver,
+//       };
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       qr,
+//       vehicle: vehicleOut,
+//       scanAccess: {
+//         allowContact: scanAccess.allowContact,
+//         reason: scanAccess.reason,
+//         subscriptionExpired: scanAccess.reason === "expired",
+//       },
+//     });
+
+//   } catch (err) {
+//     console.error("QR FETCH BY CODE ERROR:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
+
+
 export const getQRByCode = async (req, res) => {
   try {
     const { code } = req.params;
 
     if (!code) {
-      return res.status(400).json({
-        success: false,
-        message: "QR code is required",
-      });
+      return res.status(400).json({ success: false, message: "QR code is required" });
     }
 
-    // 🔥 CODE দিয়ে search
-    const qr = await QRModel.findOne({ code });
+    const qr = await QRModel.findOne({ code }).lean();
 
     if (!qr) {
-      return res.status(404).json({
-        success: false,
-        message: "QR not found",
-      });
+      return res.status(404).json({ success: false, message: "QR not found" });
     }
 
-    let vehicle = null;
+    // ✅ vehicle আর scanAccess একসাথে parallel এ চালান
+    const [vehicle, scanAccess] = await Promise.all([
+      qr.status === "assigned" && qr.vehicleId
+        ? Vehicle.findById(qr.vehicleId).lean()
+        : Promise.resolve(null),
+      getQrScanAccess(qr),
+    ]);
 
-    // ✅ যদি assigned থাকে → vehicle load
-    if (qr.status === "assigned" && qr.vehicleId) {
-      vehicle = await Vehicle.findById(qr.vehicleId);
-    }
-
-    const scanAccess = await getQrScanAccess(qr);
     let vehicleOut = vehicle;
 
     if (vehicle && !scanAccess.allowContact) {
-      const v = vehicle.toObject ? vehicle.toObject() : { ...vehicle };
       vehicleOut = {
-        ...v,
+        ...vehicle,
         ownerPhone: "",
         emergencyPhone: "",
         ownerContactVisible: false,
         driverContactVisible: false,
         emergencyContactVisible: false,
-        driver: v.driver
-          ? { ...v.driver, phone: "" }
-          : v.driver,
+        driver: vehicle.driver ? { ...vehicle.driver, phone: "" } : vehicle.driver,
       };
     }
 
@@ -491,13 +576,8 @@ export const getQRByCode = async (req, res) => {
         subscriptionExpired: scanAccess.reason === "expired",
       },
     });
-
   } catch (err) {
     console.error("QR FETCH BY CODE ERROR:", err);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };

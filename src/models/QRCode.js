@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const qrSchema = new mongoose.Schema(
     {
-        code: { type: String, unique: true, required: true },
+        code: { type: String, unique: true, required: true, index: true},
         qrCode: String,
         qrLink: String,
 

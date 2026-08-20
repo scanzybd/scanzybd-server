@@ -47,5 +47,6 @@ const tagSubscriptionSchema = new mongoose.Schema(
 
 tagSubscriptionSchema.index({ qrId: 1, status: 1 });
 tagSubscriptionSchema.index({ vehicleId: 1, orderId: 1 });
+tagSubscriptionSchema.index({ qrId: 1, validUntil: -1 });
 
 export default mongoose.model("TagSubscription", tagSubscriptionSchema);

@@ -40,6 +40,13 @@ app.get("/", (req, res) => {
 
 // routes
 app.use("/api/auth", authRoutes);
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    console.log(`${req.method} ${req.originalUrl} → ${Date.now() - start}ms`);
+  });
+  next();
+});
 app.use("/api/qr", qrRoutes);
 app.use("/api/vehicle", vehicleRoutes);
 app.use("/api/products", productRoutes); // now OK ✅
@@ -58,5 +65,7 @@ app.use("/api/tag-types", tagTypeRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/settings", siteSettingsRoutes);
 app.use("/api/cart", cartRoutes);
+
+
 
 export default app;
