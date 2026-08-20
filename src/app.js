@@ -38,15 +38,15 @@ app.get("/", (req, res) => {
   res.type("text").send("QR Tag API — use /api/* routes.");
 });
 
-// routes
-app.use("/api/auth", authRoutes);
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on("finish", () => {
-    console.log(`${req.method} ${req.originalUrl} → ${Date.now() - start}ms`);
-  });
-  next();
-});
+// // routes
+// app.use("/api/auth", authRoutes);
+// app.use((req, res, next) => {
+//   const start = Date.now();
+//   res.on("finish", () => {
+//     console.log(`${req.method} ${req.originalUrl} → ${Date.now() - start}ms`);
+//   });
+//   next();
+// });
 app.use("/api/qr", qrRoutes);
 app.use("/api/vehicle", vehicleRoutes);
 app.use("/api/products", productRoutes); // now OK ✅
