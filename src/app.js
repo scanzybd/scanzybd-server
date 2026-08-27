@@ -39,7 +39,7 @@ app.get("/", (req, res) => {
 });
 
 // // routes
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
 // app.use((req, res, next) => {
 //   const start = Date.now();
 //   res.on("finish", () => {
